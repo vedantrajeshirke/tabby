@@ -1,0 +1,9 @@
+streamlit
+pillow
+pillow-heif
+pdfplumber
+pytesseract
+pandas
+plotly
+python-dotenv
+pytest

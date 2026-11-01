@@ -1,0 +1,12 @@
+{
+  "categories": ["Groceries", "Restaurants & Cafes", "Food Delivery", "Transport", "Rent & Utilities",
+                 "Phone & Internet", "Subscriptions", "Shopping", "Education", "Health",
+                 "Personal Care", "Entertainment", "Travel", "Transfers to People", "Other"],
+  "rules": [
+    { "keywords": ["DOORDASH", "UBER EATS", "GRUBHUB"], "category": "Food Delivery" },
+    { "keywords": ["TRADER JOE", "WHOLE FOODS", "SAFEWAY", "H MART", "ALDI"], "category": "Groceries" },
+    { "keywords": ["STARBUCKS", "CHIPOTLE", "CAFE", "COFFEE"], "category": "Restaurants & Cafes" },
+    { "keywords": ["UBER", "LYFT", "METRO", "TRANSIT"], "category": "Transport" },
+    { "keywords": ["NETFLIX", "SPOTIFY", "ICLOUD"], "category": "Subscriptions" }
+  ]
+}
