@@ -1,0 +1,12 @@
+Luigi's Trattoria
+245 Castro Street
+650-555-0199
+Date: 2026-10-30
+Margherita 16.00
+Tiramisu 8.00
+Subtotal 24.00
+Sales Tax 2.10
+Suggested tip 18% 4.32
+Tip 5.00
+Grand Total 31.10
+Mastercard

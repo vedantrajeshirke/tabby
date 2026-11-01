@@ -1,0 +1,8 @@
+RECEIPT
+123 Elm Avenue
+www.example.com
+408.555.0100
+Blue Door Books
+Order #4432
+Paperback 15.00
+TOTAL 15.00

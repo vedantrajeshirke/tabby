@@ -1,0 +1,20 @@
+{
+  "document_type": "receipt",
+  "merchant": "Safeway",
+  "date": "2026-10-25",
+  "currency": "USD",
+  "subtotal": 30.00,
+  "tax": 2.50,
+  "tip": null,
+  "total": 40.00,
+  "payment_method": "card",
+  "line_items": [
+    {"name": "RICE", "quantity": null, "price": 18.00},
+    {"name": "EGGS", "quantity": null, "price": 8.00}
+  ],
+  "field_confidence": {"merchant": "high", "date": "high", "currency": "high", "total": "high", "subtotal": "high", "tax": "high"},
+  "field_reason": {"document_type": "MOCK: simulated receipt whose amounts don't add up", "total": "MOCK: found on line 'TOTAL 40.00'", "subtotal": "MOCK: found on line 'SUBTOTAL 30.00'", "tax": "MOCK: found on line 'TAX 2.50'"},
+  "text_source": "ocr",
+  "text_confidence": 85,
+  "raw_text": "[MOCK DATA]\nSAFEWAY\n10/25/2026\nRICE 18.00\nEGGS 8.00\nSUBTOTAL 30.00\nTAX 2.50\nTOTAL 40.00"
+}

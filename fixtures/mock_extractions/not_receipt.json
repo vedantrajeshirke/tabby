@@ -1,0 +1,7 @@
+{
+  "document_type": "not_an_expense",
+  "field_reason": {"document_type": "MOCK: readable text, but no amounts were found"},
+  "text_source": "ocr",
+  "text_confidence": 88,
+  "raw_text": "[MOCK DATA]\nLecture notes: introduction to databases\nChapter 3 normalization and keys"
+}

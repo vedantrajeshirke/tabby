@@ -1,0 +1,21 @@
+{
+  "document_type": "receipt",
+  "merchant": "Trader Joe",
+  "date": "2026-10-28",
+  "currency": "USD",
+  "subtotal": 21.67,
+  "tax": 1.80,
+  "tip": null,
+  "total": 23.47,
+  "payment_method": "card",
+  "line_items": [
+    {"name": "BANANAS", "quantity": null, "price": 1.67},
+    {"name": "OAT MILK", "quantity": 2, "price": 7.98},
+    {"name": "FROZEN PIZZA", "quantity": null, "price": 12.02}
+  ],
+  "field_confidence": {"merchant": "high", "date": "high", "currency": "high", "total": "high", "subtotal": "high", "tax": "high"},
+  "field_reason": {"document_type": "MOCK: simulated receipt", "merchant": "MOCK: simulated", "date": "MOCK: simulated", "total": "MOCK: found on line 'TOTAL 23.47'", "subtotal": "MOCK: found on line 'SUBTOTAL 21.67'", "tax": "MOCK: found on line 'TAX 1.80'"},
+  "text_source": "ocr",
+  "text_confidence": 92,
+  "raw_text": "[MOCK DATA]\nTRADER JOE'S\n10/28/2026\nBANANAS 1.67\nOAT MILK 2 @ 3.99 7.98\nFROZEN PIZZA 12.02\nSUBTOTAL 21.67\nTAX 1.80\nTOTAL 23.47\nVISA"
+}

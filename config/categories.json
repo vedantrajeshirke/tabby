@@ -2,11 +2,16 @@
   "categories": ["Groceries", "Restaurants & Cafes", "Food Delivery", "Transport", "Rent & Utilities",
                  "Phone & Internet", "Subscriptions", "Shopping", "Education", "Health",
                  "Personal Care", "Entertainment", "Travel", "Transfers to People", "Other"],
+  "generic_keywords": ["CAFE", "COFFEE", "METRO", "TRANSIT"],
   "rules": [
     { "keywords": ["DOORDASH", "UBER EATS", "GRUBHUB"], "category": "Food Delivery" },
-    { "keywords": ["TRADER JOE", "WHOLE FOODS", "SAFEWAY", "H MART", "ALDI"], "category": "Groceries" },
-    { "keywords": ["STARBUCKS", "CHIPOTLE", "CAFE", "COFFEE"], "category": "Restaurants & Cafes" },
+    { "keywords": ["TRADER JOE", "WHOLE FOODS", "SAFEWAY", "H MART", "ALDI", "COSTCO", "KROGER"], "category": "Groceries" },
+    { "keywords": ["STARBUCKS", "CHIPOTLE", "MCDONALD", "CAFE", "COFFEE"], "category": "Restaurants & Cafes" },
     { "keywords": ["UBER", "LYFT", "METRO", "TRANSIT"], "category": "Transport" },
-    { "keywords": ["NETFLIX", "SPOTIFY", "ICLOUD"], "category": "Subscriptions" }
+    { "keywords": ["NETFLIX", "SPOTIFY", "ICLOUD"], "category": "Subscriptions" },
+    { "keywords": ["VERIZON", "T-MOBILE", "COMCAST", "XFINITY"], "category": "Phone & Internet" },
+    { "keywords": ["TARGET", "WALMART", "AMAZON", "IKEA", "BEST BUY"], "category": "Shopping" },
+    { "keywords": ["CVS", "WALGREENS"], "category": "Health" },
+    { "keywords": ["AMC", "REGAL"], "category": "Entertainment" }
   ]
 }

@@ -1,0 +1,7 @@
+{
+  "document_type": "unreadable",
+  "field_reason": {"document_type": "MOCK: text confidence 22 is below the minimum of 50"},
+  "text_source": "ocr",
+  "text_confidence": 22,
+  "raw_text": "[MOCK DATA]\nTR4D3 J ~~ 1o/2"
+}

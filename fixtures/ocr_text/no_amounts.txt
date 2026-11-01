@@ -1,0 +1,2 @@
+Lecture notes: introduction to databases
+Chapter 3 covers normalization and keys

@@ -1,0 +1,13 @@
+{
+  "document_type": "payment_screenshot",
+  "merchant": "Jane Doe",
+  "date": "2026-10-20",
+  "currency": "USD",
+  "total": 45.00,
+  "payment_method": "venmo",
+  "field_confidence": {"merchant": "high", "date": "high", "currency": "high", "total": "high"},
+  "field_reason": {"document_type": "MOCK: simulated payment screenshot", "merchant": "MOCK: found on line 'You paid Jane Doe'", "total": "MOCK: first amount, found on line '-$45.00'"},
+  "text_source": "ocr",
+  "text_confidence": 90,
+  "raw_text": "[MOCK DATA]\nVenmo\nYou paid Jane Doe\n-$45.00\nOct 20, 2026"
+}

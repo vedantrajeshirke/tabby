@@ -36,3 +36,15 @@ def test_tesseract_banner(monkeypatch):
     monkeypatch.setenv("TESSERACT_CMD", "/nonexistent/tesseract")
     at = AppTest.from_file(str(ROOT / "app.py")).run()
     assert any("Tesseract OCR not found" in w.value for w in at.warning)
+
+
+def test_mock_banner_on_capture_page(monkeypatch):
+    monkeypatch.setenv("EXTRACTION_BACKEND", "mock")
+    at = AppTest.from_file(str(ROOT / "pages/1_Add_Expense.py")).run()
+    assert any("MOCK MODE" in w.value for w in at.warning)
+
+
+def test_no_mock_banner_in_local_mode(monkeypatch):
+    monkeypatch.setenv("EXTRACTION_BACKEND", "local")
+    at = AppTest.from_file(str(ROOT / "pages/1_Add_Expense.py")).run()
+    assert not any("MOCK MODE" in w.value for w in at.warning)

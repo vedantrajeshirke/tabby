@@ -1,0 +1,8 @@
+Corner Hardware
+Oct 12, 2026
+Hammer 20.00
+Subtotal 20.00
+State Tax 6.25% 1.25
+City Tax 1.00% 0.20
+Total Tax 1.45
+Total 21.45
