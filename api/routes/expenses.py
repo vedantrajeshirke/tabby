@@ -72,9 +72,7 @@ def get_expense(expense_id: int, user_id: str = Depends(current_user), conn=Depe
     return {**public_expense(row), "extraction": redact_value(extraction) if extraction else None}
 
 
-@router.patch("/expenses/{expense_id}")
-def edit_expense(expense_id: int, body: ExpenseEdit, user_id: str = Depends(current_user), conn=Depends(get_conn)) -> dict:
-    row = _owned(conn, user_id, expense_id)
+def _check_edit(conn, user_id: str, row: dict, body: ExpenseEdit) -> tuple[expenses.Review, confirm.FormValues]:
     changes = body.model_dump(exclude_unset=True)
     merged = {key: changes.get(key, row[key]) for key in ("merchant", "total", "subtotal", "tax", "tip", "payment_method", "note")}
     day = changes["date"] if changes.get("date") else date.fromisoformat(row["date"])
@@ -84,9 +82,21 @@ def edit_expense(expense_id: int, body: ExpenseEdit, user_id: str = Depends(curr
     )
     today = expenses.resolve_today(body.client_today)
     try:
-        checked = expenses.edit(conn, user_id, row, form, today, changes.get("category"))
+        return expenses.edit(conn, user_id, row, form, today, changes.get("category")), form
     except expenses.InvalidCategory as e:
         raise HTTPException(status_code=422, detail=str(e))
+
+
+@router.post("/expenses/{expense_id}/validate")
+def validate_edit(expense_id: int, body: ExpenseEdit, user_id: str = Depends(current_user), conn=Depends(get_conn)) -> dict:
+    """Re-check edits to a saved expense, which isn't its own duplicate. Saves nothing."""
+    checked, _ = _check_edit(conn, user_id, _owned(conn, user_id, expense_id), body)
+    return expenses.report_review(checked)
+
+
+@router.patch("/expenses/{expense_id}")
+def edit_expense(expense_id: int, body: ExpenseEdit, user_id: str = Depends(current_user), conn=Depends(get_conn)) -> dict:
+    checked, form = _check_edit(conn, user_id, _owned(conn, user_id, expense_id), body)
     if checked.blocked:
         raise blocked_response(checked)
     db.update_expense(conn, user_id, expense_id, {
@@ -101,6 +111,8 @@ def edit_expense(expense_id: int, body: ExpenseEdit, user_id: str = Depends(curr
         "category": checked.category,
         "category_source": checked.category_source,
     })
+    if body.always_use_category and checked.edited.merchant and checked.category_source == expenses.SOURCE_MANUAL:
+        db.set_override(conn, user_id, checked.edited.merchant, checked.category)
     return {"expense": public_expense(db.get_expense(conn, user_id, expense_id)), **expenses.report_review(checked)}
 
 

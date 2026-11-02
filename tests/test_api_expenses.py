@@ -381,3 +381,58 @@ def test_validation_errors_do_not_echo_values(api):
 def test_interactive_docs_are_off(api):
     for path in ("/docs", "/redoc", "/openapi.json"):
         assert api.get(path).status_code == 404
+
+
+def manual_body(**changes):
+    return {"merchant": "Made Up Shop", "date": "2026-10-20", "total": 12.5, "client_today": "2026-11-01", **changes}
+
+
+def test_editing_isnt_its_own_duplicate_but_another_expense_is(api):
+    client = api
+    first = client.post("/api/expenses", json=manual_body()).json()["expense"]["id"]
+    second = client.post("/api/expenses", json=manual_body(total=99)).json()["expense"]["id"]
+
+    alone = client.post(f"/api/expenses/{first}/validate", json={"note": "lunch"}).json()
+    assert alone["duplicates"] == []
+    clash = client.post(f"/api/expenses/{second}/validate", json={"total": 12.5}).json()
+    assert [d["expense_id"] for d in clash["duplicates"]] == [first]
+
+
+def test_validating_an_edit_saves_nothing_and_reports_blocking_errors(api):
+    client = api
+    expense_id = client.post("/api/expenses", json=manual_body()).json()["expense"]["id"]
+    report = client.post(f"/api/expenses/{expense_id}/validate", json={"total": 0}).json()
+    assert report["blocks_save"] is True
+    assert client.get(f"/api/expenses/{expense_id}").json()["total"] == 12.5
+
+
+def test_another_users_expense_cant_be_validated(api):
+    client, state = api, api.state
+    expense_id = client.post("/api/expenses", json=manual_body()).json()["expense"]["id"]
+    state["user"] = USER_B
+    assert client.post(f"/api/expenses/{expense_id}/validate", json={"total": 1}).status_code == 404
+
+
+def test_an_edit_can_remember_the_category_for_the_merchant(api):
+    client = api
+    expense_id = client.post("/api/expenses", json=manual_body(category="Other")).json()["expense"]["id"]
+    assert client.patch(
+        f"/api/expenses/{expense_id}", json={"category": "Education", "always_use_category": True}
+    ).status_code == 200
+    next_one = client.post("/api/validate", json=manual_body(total=1))
+    assert next_one.json()["category"] == "Education"
+    assert next_one.json()["category_source"] == "override"
+
+
+def test_periods_follow_the_users_cycle(api):
+    client, state = api, api.state
+    today = datetime.now(timezone.utc).date()
+    assert client.get("/api/periods").json()[0]["start"] == today.replace(day=1).isoformat()
+
+    assert client.put("/api/settings", json={"cycle_start_day": 15}).status_code == 200
+    found = client.get("/api/periods").json()
+    assert date.fromisoformat(found[0]["start"]).day == 15
+    assert len(found) == 12
+
+    state["user"] = USER_B  # another user's settings don't apply
+    assert date.fromisoformat(client.get("/api/periods").json()[0]["start"]).day == 1

@@ -16,3 +16,22 @@ export function parseAmount(text: string): number | null {
   if (!cleaned) return null;
   return /^-?\d*\.?\d+$|^-?\d+\.$/.test(cleaned) ? Number(cleaned) : NaN;
 }
+
+/** A YYYY-MM-DD date, without the time-zone shift `new Date(text)` would apply. */
+export function formatDate(text: string): string {
+  const [year, month, day] = text.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+export const PAYMENT_METHODS = [
+  ["card", "Card"],
+  ["cash", "Cash"],
+  ["venmo", "Venmo"],
+  ["zelle", "Zelle"],
+  ["paypal", "PayPal"],
+  ["other", "Other"],
+];
+
+export function paymentLabel(method: string | null): string {
+  return PAYMENT_METHODS.find(([value]) => value === method)?.[1] ?? "—";
+}

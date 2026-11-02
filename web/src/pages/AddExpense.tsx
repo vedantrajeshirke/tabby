@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
-import { Link } from "react-router";
+import { Link, useLocation } from "react-router";
 import { ApiError, getCategories, uploadFile, type Extraction, type SavedExpense, type Upload } from "../api";
 import ConfirmForm from "../components/ConfirmForm";
 import { formatMoney, localToday } from "../format";
@@ -45,12 +45,18 @@ export default function AddExpense({ localMode }: { localMode: boolean }) {
   const [categories, setCategories] = useState<string[]>([]);
   const reading = useRef<AbortController | null>(null);
   const previewUrl = useFilePreview(file);
+  const { pathname } = useLocation();
 
   useEffect(() => {
     getCategories().then(setCategories).catch(() => setError("Couldn't load the categories. Refresh this page to try again."));
   }, []);
 
   useEffect(() => () => reading.current?.abort(), []);
+
+  // Unsaved work survives leaving this page, but a finished save doesn't need to.
+  useEffect(() => {
+    if (pathname !== "/") setStage((current) => (current.name === "saved" ? { name: "pick" } : current));
+  }, [pathname]);
 
   function reset() {
     reading.current?.abort();

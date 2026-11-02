@@ -4,6 +4,8 @@ import { NavLink, Route, Routes, useLocation } from "react-router";
 import { getStatus, setAuthHandlers, type Status } from "./api";
 import NamePrompt from "./components/NamePrompt";
 import AddExpense from "./pages/AddExpense";
+import ExpenseDetailPage from "./pages/ExpenseDetail";
+import Expenses from "./pages/Expenses";
 import SignIn from "./pages/SignIn";
 import { supabase } from "./supabase";
 
@@ -16,7 +18,7 @@ const ICONS = {
 
 const PAGES = [
   { path: "/", label: "Add", icon: ICONS.add, title: "Add Expense", next: "" },
-  { path: "/expenses", label: "Expenses", icon: ICONS.expenses, title: "Expenses", next: "The expense list arrives in M9." },
+  { path: "/expenses", label: "Expenses", icon: ICONS.expenses, title: "Expenses", next: "" },
   { path: "/dashboard", label: "Dashboard", icon: ICONS.dashboard, title: "Dashboard", next: "Charts and insights arrive in M10." },
   { path: "/settings", label: "Settings", icon: ICONS.settings, title: "Settings", next: "Settings arrive in M11." },
 ];
@@ -135,7 +137,7 @@ function Shell({ status, name, email, onSignOut }: { status: Status; name?: stri
             <NavLink
               key={page.path}
               to={page.path}
-              end
+              end={page.path === "/"}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
                   isActive ? "bg-mint text-pine" : "text-white/75 hover:bg-white/10 hover:text-white"
@@ -186,7 +188,9 @@ function Shell({ status, name, email, onSignOut }: { status: Status; name?: stri
           </div>
           <Routes>
             <Route path="/" element={null} />
-            {PAGES.slice(1).map((page) => (
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/expenses/:id" element={<ExpenseDetailPage />} />
+            {PAGES.slice(2).map((page) => (
               <Route key={page.path} path={page.path} element={<Placeholder title={page.title} next={page.next} />} />
             ))}
           </Routes>
@@ -201,7 +205,7 @@ function Shell({ status, name, email, onSignOut }: { status: Status; name?: stri
           <NavLink
             key={page.path}
             to={page.path}
-            end
+            end={page.path === "/"}
             className={({ isActive }) =>
               `flex flex-col items-center gap-1 py-2 text-xs font-medium ${isActive ? "text-forest" : "text-muted"}`
             }

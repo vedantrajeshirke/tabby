@@ -138,7 +138,9 @@ All routes need a signed-in user, apart from the status check. The user always c
 | `POST /api/extractions` | Upload a file; returns the extraction, issues, suggested category and duplicate warnings. Keeps nothing, and the file is discarded |
 | `POST /api/validate` | Re-check edited form values |
 | `POST /api/expenses` | Save a confirmed expense. No file is sent |
-| `GET /api/expenses`, `PATCH` / `DELETE /api/expenses/{id}` | List with period and category filters, edit, delete |
+| `GET /api/expenses`, `GET` / `PATCH` / `DELETE /api/expenses/{id}` | List with period and category filters, view, edit, delete |
+| `POST /api/expenses/{id}/validate` | Re-check edits to a saved expense |
+| `GET /api/periods` | The user's recent budget cycles |
 | `GET /api/dashboard` | All dashboard numbers and insights, computed on the server |
 | `GET` / `PUT /api/settings` | Name, budget, cycle start day |
 | `POST` / `DELETE /api/demo-data` | Load or remove synthetic data |

@@ -80,6 +80,7 @@ class ExpenseEdit(Strict):
     payment_method: PaymentMethod | None = None
     note: str | None = Field(default=None, max_length=1000)
     category: str | None = Field(default=None, max_length=100)
+    always_use_category: bool = False
     client_today: Date | None = None
 
 

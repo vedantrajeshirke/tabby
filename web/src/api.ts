@@ -53,7 +53,23 @@ export type ExpenseBody = {
   file_hash: string | null;
 };
 
-export type SavedExpense = { id: number; merchant: string; date: string; total: number; currency: string; category: string };
+export type SavedExpense = {
+  id: number;
+  merchant: string;
+  date: string;
+  total: number;
+  currency: string;
+  subtotal: number | null;
+  tax: number | null;
+  tip: number | null;
+  category: string;
+  category_label: string;
+  payment_method: string | null;
+  note: string | null;
+  is_synthetic: boolean;
+};
+export type ExpenseDetail = SavedExpense & { extraction: Extraction | null };
+export type Period = { start: string; end: string; label: string };
 
 export class ApiError extends Error {
   constructor(
@@ -65,6 +81,7 @@ export class ApiError extends Error {
   }
 }
 
+export const LIST_LIMIT = 1000;
 const BASE = import.meta.env.VITE_API_URL ?? "";
 const CONNECTION_PROBLEM = "Can't reach SnapSpend. Check your connection and try again.";
 
@@ -88,6 +105,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     if (e instanceof DOMException && e.name === "AbortError") throw e;
     throw new ApiError(CONNECTION_PROBLEM, 0);
   }
+  if (response.status === 204) return undefined as T;
   if (response.ok) return response.json();
 
   const body = await response.json().catch(() => null);
@@ -127,4 +145,42 @@ export function validateExpense(body: ExpenseBody, signal: AbortSignal): Promise
 
 export function saveExpense(body: ExpenseBody): Promise<{ expense: SavedExpense }> {
   return postJson("/expenses", body);
+}
+
+export function getPeriods(clientToday: string): Promise<Period[]> {
+  return request(`/periods?client_today=${clientToday}`);
+}
+
+export function listExpenses(
+  filters: { start?: string; end?: string; category?: string },
+  signal: AbortSignal,
+): Promise<SavedExpense[]> {
+  const query = new URLSearchParams({ limit: String(LIST_LIMIT) });
+  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value);
+  return request(`/expenses?${query}`, { signal });
+}
+
+export function getExpense(id: string, signal: AbortSignal): Promise<ExpenseDetail> {
+  return request(`/expenses/${encodeURIComponent(id)}`, { signal });
+}
+
+function editFields(body: ExpenseBody) {
+  const { extraction: _extraction, file_hash: _fileHash, ...fields } = body;
+  return fields;
+}
+
+export function validateEdit(id: number, body: ExpenseBody, signal: AbortSignal): Promise<Report> {
+  return postJson(`/expenses/${id}/validate`, editFields(body), signal);
+}
+
+export function updateExpense(id: number, body: ExpenseBody): Promise<{ expense: SavedExpense }> {
+  return request(`/expenses/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(editFields(body)),
+  });
+}
+
+export function deleteExpense(id: number): Promise<void> {
+  return request(`/expenses/${id}`, { method: "DELETE" });
 }

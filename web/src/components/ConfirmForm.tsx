@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ApiError, saveExpense, validateExpense, type ExpenseBody, type Report, type SavedExpense, type Upload } from "../api";
-import { localToday, parseAmount } from "../format";
+import {
+  ApiError,
+  saveExpense,
+  updateExpense,
+  validateEdit,
+  validateExpense,
+  type ExpenseBody,
+  type ExpenseDetail,
+  type Report,
+  type SavedExpense,
+  type Upload,
+} from "../api";
+import { localToday, parseAmount, PAYMENT_METHODS } from "../format";
 
-const PAYMENT_METHODS = [
-  ["card", "Card"],
-  ["cash", "Cash"],
-  ["venmo", "Venmo"],
-  ["zelle", "Zelle"],
-  ["paypal", "PayPal"],
-  ["other", "Other"],
-];
 const VALIDATE_DELAY_MS = 350;
 const UNUSABLE = new Set(["unreadable", "not_an_expense"]);
 const AMOUNT_FIELDS = ["total", "subtotal", "tax", "tip"] as const;
@@ -74,10 +77,11 @@ function Preview({ file, url }: { file: File | null; url: string | null }) {
   );
 }
 
-export default function ConfirmForm({ upload, file, previewUrl, categories, onDiscard, onSaved }: {
-  upload: Upload | null;
-  file: File | null;
-  previewUrl: string | null;
+export default function ConfirmForm({ upload = null, existing, file = null, previewUrl = null, categories, onDiscard, onSaved }: {
+  upload?: Upload | null;
+  existing?: ExpenseDetail; // set when editing a saved expense
+  file?: File | null;
+  previewUrl?: string | null;
   categories: string[];
   onDiscard: () => void;
   onSaved: (expense: SavedExpense) => void;
@@ -86,7 +90,16 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
   // A failed read starts empty, as manual entry; its text stays available below.
   const prefill = extraction && !UNUSABLE.has(extraction.document_type) ? extraction : null;
   const initial: Values = useMemo(
-    () => ({
+    () => existing ? {
+      merchant: existing.merchant,
+      date: existing.date,
+      total: asText(existing.total),
+      subtotal: asText(existing.subtotal),
+      tax: asText(existing.tax),
+      tip: asText(existing.tip),
+      payment_method: existing.payment_method ?? "",
+      note: existing.note ?? "",
+    } : ({
       merchant: prefill?.merchant ?? "",
       date: prefill ? upload!.suggested_date : localToday(),
       total: asText(prefill?.total),
@@ -96,7 +109,7 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
       payment_method: prefill?.payment_method ?? "",
       note: "",
     }),
-    [prefill, upload],
+    [existing, prefill, upload],
   );
 
   const [values, setValues] = useState(initial);
@@ -135,7 +148,7 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
     const controller = new AbortController();
     setChecking(true);
     const timer = setTimeout(() => {
-      validateExpense(body, controller.signal)
+      (existing ? validateEdit(existing.id, body, controller.signal) : validateExpense(body, controller.signal))
         .then((result) => {
           setReport(result);
           setChecking(false);
@@ -150,7 +163,7 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
       clearTimeout(timer);
       controller.abort();
     };
-  }, [body, canCheck]);
+  }, [body, canCheck, existing]);
 
   function set<K extends keyof Values>(key: K, value: Values[K]) {
     setError("");
@@ -161,7 +174,7 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
     setSaving(true);
     setError("");
     try {
-      const { expense } = await saveExpense(body);
+      const { expense } = await (existing ? updateExpense(existing.id, body) : saveExpense(body));
       onSaved(expense);
     } catch (e) {
       if (e instanceof ApiError && e.report) setReport(e.report);
@@ -204,15 +217,18 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
   const issues = report?.issues ?? [];
   const blockers = issues.filter((i) => i.severity === "error" && !["V01", "V02"].includes(i.code));
   const warnings = issues.filter((i) => i.severity === "warning");
-  const currency = extraction?.currency ?? "USD";
+  const currency = existing?.currency ?? extraction?.currency ?? "USD";
   const canSave = canCheck && !saving && !checking && report !== null && !report.blocks_save;
-  const shownCategory = category ?? report?.category ?? "";
+  const shownCategory = category ?? report?.category ?? existing?.category ?? "";
+  const rawText = existing?.extraction?.raw_text ?? extraction?.raw_text;
+  const heading = existing ? "Edit expense" : prefill ? "Check the details" : "Enter the details";
+  const intro = existing ? "Change anything that's wrong, then save." : prefill ? "Fix anything that looks wrong, then save." : "Add what you know. Only the total and date are needed.";
   const hasPreview = Boolean(file && previewUrl);
 
   return (
     <section>
-      <h1 className="text-3xl font-semibold tracking-tight text-pine">{prefill ? "Check the details" : "Enter the details"}</h1>
-      <p className="mt-2 text-muted">{prefill ? "Fix anything that looks wrong, then save." : "Add what you know. Only the total and date are needed."}</p>
+      <h1 className="text-3xl font-semibold tracking-tight text-pine">{heading}</h1>
+      <p className="mt-2 text-muted">{intro}</p>
 
       <div className={`mt-6 grid gap-6 ${hasPreview ? "md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" : "max-w-xl"}`}>
         {hasPreview && <div><Preview file={file} url={previewUrl} /></div>}
@@ -287,7 +303,7 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
             </label>
           )}
 
-          <details className="rounded-xl border border-line px-3 py-2.5" open={Boolean(prefill?.subtotal != null || prefill?.tax != null || prefill?.tip != null)}>
+          <details className="rounded-xl border border-line px-3 py-2.5" open={Boolean(initial.subtotal || initial.tax || initial.tip)}>
             <summary className="cursor-pointer text-sm font-medium text-pine">Subtotal, tax and tip</summary>
             <div className="mt-3 grid grid-cols-3 gap-3 pb-1">
               {amountInput("subtotal", "Subtotal")}
@@ -319,10 +335,10 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
             />
           </Field>
 
-          {extraction?.raw_text && (
+          {rawText && (
             <details className="rounded-xl border border-line px-3 py-2.5">
               <summary className="cursor-pointer text-sm font-medium text-pine">Show extracted text</summary>
-              <pre className="mt-3 max-h-64 overflow-auto font-sans text-xs whitespace-pre-wrap text-muted">{extraction.raw_text}</pre>
+              <pre className="mt-3 max-h-64 overflow-auto font-sans text-xs whitespace-pre-wrap text-muted">{rawText}</pre>
             </details>
           )}
 
@@ -334,14 +350,14 @@ export default function ConfirmForm({ upload, file, previewUrl, categories, onDi
               disabled={!canSave}
               className="flex-1 rounded-xl bg-forest px-4 py-3 font-medium text-white transition-colors hover:bg-pine disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {saving ? "Saving…" : "Save expense"}
+              {saving ? "Saving…" : existing ? "Save changes" : "Save expense"}
             </button>
             <button
               type="button"
               onClick={onDiscard}
               className="rounded-xl border border-line px-5 py-3 font-medium text-pine transition-colors hover:bg-mint"
             >
-              Discard
+              {existing ? "Cancel" : "Discard"}
             </button>
           </div>
         </form>
