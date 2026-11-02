@@ -17,6 +17,14 @@ class LineItem:
 
 
 @dataclass
+class ValidationIssue:
+    code: str
+    severity: str  # error | warning
+    field: str | None
+    message: str
+
+
+@dataclass
 class Extraction:
     document_type: str  # receipt | payment_screenshot | not_an_expense | unreadable
     merchant: str | None = None

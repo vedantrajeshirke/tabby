@@ -2,6 +2,7 @@
 import sqlite3
 from pathlib import Path
 
+from core.categorize import normalize_merchant
 from core.config import DB_PATH
 from core.models import Settings
 
@@ -97,3 +98,24 @@ def save_settings(conn: sqlite3.Connection, s: Settings) -> None:
     set_setting(conn, "monthly_budget", None if s.monthly_budget is None else str(s.monthly_budget))
     set_setting(conn, "cycle_start_day", str(s.cycle_start_day))
     conn.commit()
+
+
+def get_overrides(conn: sqlite3.Connection) -> dict[str, str]:
+    return {r["merchant_key"]: r["category"] for r in conn.execute("SELECT * FROM merchant_overrides")}
+
+
+def set_override(conn: sqlite3.Connection, merchant: str, category: str) -> None:
+    conn.execute(
+        "INSERT INTO merchant_overrides (merchant_key, category) VALUES (?, ?) "
+        "ON CONFLICT(merchant_key) DO UPDATE SET category = excluded.category",
+        (normalize_merchant(merchant), category),
+    )
+    conn.commit()
+
+
+def expenses_with_hash(conn: sqlite3.Connection, file_hash: str) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM expenses WHERE file_hash = ? ORDER BY id", (file_hash,)).fetchall()
+
+
+def expenses_on_date(conn: sqlite3.Connection, day: str) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM expenses WHERE date = ? ORDER BY id", (day,)).fetchall()
