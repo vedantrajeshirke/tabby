@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { NavLink, Route, Routes, useLocation } from "react-router";
 import { getStatus, setAuthHandlers, type Status } from "./api";
+import NamePrompt from "./components/NamePrompt";
 import AddExpense from "./pages/AddExpense";
 import SignIn from "./pages/SignIn";
 import { supabase } from "./supabase";
@@ -107,10 +108,20 @@ export default function App() {
     return <SignIn client={supabase} recovering={recovering} onRecovered={() => setRecovering(false)} />;
   }
   // Keyed by user, so nothing from one account's screens can carry over to the next.
-  return <Shell key={session.user.id} status={status} email={session.user.email} onSignOut={() => void supabase?.auth.signOut()} />;
+  const { first_name: first, last_name: last, full_name: full } = session.user.user_metadata;
+  const name = [first, last].filter(Boolean).join(" ") || full || "";
+  return (
+    <Shell
+      key={session.user.id}
+      status={status}
+      name={name}
+      email={session.user.email}
+      onSignOut={() => void supabase?.auth.signOut()}
+    />
+  );
 }
 
-function Shell({ status, email, onSignOut }: { status: Status; email?: string; onSignOut?: () => void }) {
+function Shell({ status, name, email, onSignOut }: { status: Status; name?: string; email?: string; onSignOut?: () => void }) {
   const { pathname } = useLocation();
 
   return (
@@ -138,7 +149,7 @@ function Shell({ status, email, onSignOut }: { status: Status; email?: string; o
         </nav>
         {onSignOut && (
           <div className="mt-auto border-t border-white/15 px-3 pt-4">
-            <p className="truncate text-xs text-white/75">{email}</p>
+            <p className="truncate text-sm font-medium text-white">{name || email}</p>
             <button onClick={onSignOut} className="mt-2 text-sm font-medium text-mint hover:underline">Sign out</button>
           </div>
         )}
@@ -146,10 +157,16 @@ function Shell({ status, email, onSignOut }: { status: Status; email?: string; o
 
       <header className="flex items-center justify-between border-b border-line px-4 py-3 text-pine md:hidden">
         <Logo />
-        {onSignOut && <button onClick={onSignOut} className="text-sm font-medium text-forest">Sign out</button>}
+        {onSignOut && (
+          <div className="flex min-w-0 items-center gap-3 pl-3">
+            <p className="truncate text-sm text-muted">{name || email}</p>
+            <button onClick={onSignOut} className="shrink-0 text-sm font-medium text-forest">Sign out</button>
+          </div>
+        )}
       </header>
 
       <div className="mx-auto max-w-4xl px-4 pt-6 pb-24 md:px-10 md:pt-10 md:pb-10">
+        {onSignOut && !name && <NamePrompt />}
         {status.mock_mode && (
           <p role="status" className="mb-4 rounded-xl bg-mint p-3 text-sm font-semibold text-pine">
             MOCK MODE — extraction is simulated

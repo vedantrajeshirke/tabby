@@ -66,6 +66,55 @@ test("the app stays closed until sign-in, sends the token, and sign-out clears t
   await expect(page.getByText("Unsaved Cafe")).toHaveCount(0);
 });
 
+test("creating an account sends the name", async ({ page }) => {
+  await fakeBackends(page, []);
+  let sent: Record<string, string> = {};
+  await page.route("**/fake-supabase/auth/v1/signup**", (route) => {
+    sent = route.request().postDataJSON().data;
+    return route.fulfill({
+      json: { id: USER_ID, aud: "authenticated", email: EMAIL, app_metadata: {}, user_metadata: sent, created_at: "2026-01-01T00:00:00Z" },
+    });
+  });
+  await page.goto(APP);
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await page.getByLabel("First name").fill("  Sam ");
+  await page.getByLabel("Last name").fill("Example");
+  await page.getByLabel("Email").fill(EMAIL);
+  await page.getByLabel("Password").fill("a-long-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByText("Check your email")).toBeVisible();
+  expect(sent).toEqual({ first_name: "Sam", last_name: "Example" });
+});
+
+test("an account without a name is asked once, then shows the name instead of the email", async ({ page }) => {
+  await fakeBackends(page, []);
+  await page.route("**/fake-supabase/auth/v1/user**", (route) =>
+    route.fulfill({
+      json: {
+        id: USER_ID,
+        aud: "authenticated",
+        email: EMAIL,
+        app_metadata: {},
+        user_metadata: route.request().postDataJSON().data,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+    }),
+  );
+  await page.goto(APP);
+  await signIn(page, "right-password");
+
+  await expect(page.getByRole("heading", { name: "What should we call you?" })).toBeVisible();
+  await expect(page.getByText(EMAIL).filter({ visible: true })).toBeVisible();
+
+  await page.getByLabel("First name").fill("Sam");
+  await page.getByLabel("Last name").fill("Example");
+  await page.getByRole("button", { name: "Save name" }).click();
+
+  await expect(page.getByText("Sam Example").filter({ visible: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What should we call you?" })).toHaveCount(0);
+  await expect(page.getByText(EMAIL)).toHaveCount(0);
+});
+
 test("create-account and reset screens are reachable", async ({ page }) => {
   await fakeBackends(page, []);
   await page.goto(APP);

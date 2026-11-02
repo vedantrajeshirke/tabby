@@ -23,6 +23,8 @@ export default function SignIn({ client, recovering, onRecovered }: {
   const mode = recovering ? "new-password" : chosenMode;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -46,7 +48,10 @@ export default function SignIn({ client, recovering, onRecovered }: {
         const { error } = await client.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { first_name: firstName.trim(), last_name: lastName.trim() },
+          },
         });
         if (error) setError(error.message);
         else setNotice("Check your email for a link to confirm your account.");
@@ -100,6 +105,36 @@ export default function SignIn({ client, recovering, onRecovered }: {
           {notice && <p role="status" className="mt-4 rounded-xl bg-mint p-3 text-sm text-pine">{notice}</p>}
 
           <form onSubmit={submit} className="mt-6 space-y-4">
+            {mode === "sign-up" && (
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-sm font-medium text-pine">
+                  First name
+                  <input
+                    required
+                    pattern=".*\S.*"
+                    title="Enter your first name."
+                    maxLength={100}
+                    autoComplete="given-name"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-pine">
+                  Last name
+                  <input
+                    required
+                    pattern=".*\S.*"
+                    title="Enter your last name."
+                    maxLength={100}
+                    autoComplete="family-name"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+            )}
             {needsEmail && (
               <label className="block text-sm font-medium text-pine">
                 Email
