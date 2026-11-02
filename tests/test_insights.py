@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 
 import pandas as pd
@@ -8,7 +9,7 @@ from core.dashboard import COLUMNS
 from core.models import Settings
 
 TODAY = date(2026, 11, 15)
-WINDOW = insights.Window(TODAY, date(2026, 11, 1), date(2026, 11, 30))
+WINDOW = insights.Window(TODAY, date(2026, 11, 1), date(2026, 11, 30), date(2026, 10, 1), date(2026, 10, 15))
 
 
 def frame(*rows: tuple) -> pd.DataFrame:
@@ -26,9 +27,9 @@ def frame(*rows: tuple) -> pd.DataFrame:
 def test_budget_pace_needs_a_budget_and_three_days():
     current = frame(("A", 50, "Other"))
     assert insights.budget_pace(current, Settings(), WINDOW) is None
-    second_day = insights.Window(date(2026, 11, 2), WINDOW.start, WINDOW.end)
+    second_day = replace(WINDOW, today=date(2026, 11, 2))
     assert insights.budget_pace(current, Settings(monthly_budget=500), second_day) is None
-    third_day = insights.Window(date(2026, 11, 3), WINDOW.start, WINDOW.end)
+    third_day = replace(WINDOW, today=date(2026, 11, 3))
     assert insights.budget_pace(current, Settings(monthly_budget=500), third_day) is not None
 
 
@@ -46,7 +47,7 @@ def test_budget_pace_warns_about_the_projection():
 
 
 def test_budget_pace_when_already_over_and_on_the_last_day():
-    last_day = insights.Window(date(2026, 11, 30), WINDOW.start, WINDOW.end)
+    last_day = replace(WINDOW, today=date(2026, 11, 30))
     found = insights.budget_pace(frame(("A", 600, "Other")), Settings("", 500), last_day)
     assert "with today left, $100.00 over." in found.text
     assert found.tone == "warning"
@@ -57,29 +58,67 @@ def test_budget_pace_when_already_over_and_on_the_last_day():
 
 def test_category_change_thresholds_are_inclusive():
     before = frame(("A", 100, "Food"))
-    assert insights.category_change(frame(("A", 120, "Food")), before, 1).data["diff"] == 20
-    assert insights.category_change(frame(("A", 119.99, "Food")), before, 1) is None  # under $20
-    assert insights.category_change(frame(("A", 225, "Food")), frame(("A", 200, "Food")), 1) is None  # $25, but under 20%
+    assert insights.category_change(frame(("A", 120, "Food")), before, WINDOW).data["diff"] == 20
+    assert insights.category_change(frame(("A", 119.99, "Food")), before, WINDOW) is None  # under $20
+    assert insights.category_change(frame(("A", 225, "Food")), frame(("A", 200, "Food")), WINDOW) is None  # $25, but under 20%
 
 
-def test_category_change_picks_the_largest_rise_and_says_so():
+def test_category_change_waits_until_day_seven():
+    now, before = frame(("A", 150, "Food")), frame(("A", 100, "Food"))
+    assert insights.category_change(now, before, replace(WINDOW, today=date(2026, 11, 6))) is None
+    assert insights.category_change(now, before, replace(WINDOW, today=date(2026, 11, 7))) is not None
+
+
+def test_category_change_picks_the_largest_rise_and_names_the_dates():
     found = insights.category_change(
-        frame(("A", 150, "Food"), ("B", 90, "Fun")), frame(("A", 100, "Food"), ("B", 30, "Fun")), 1
+        frame(("A", 150, "Food"), ("B", 90, "Fun")), frame(("A", 100, "Food"), ("B", 30, "Fun")), WINDOW
     )
-    assert found.text == "Fun: $90.00 so far, $60.00 more than this point last month."
-
-
-def test_category_change_says_period_for_custom_cycles():
-    assert "last period" in insights.category_change(frame(("A", 150, "Food")), frame(("A", 100, "Food")), 15).text
+    assert found.text == "Fun: $90.00 so far (Nov 1–15), $60.00 more than Oct 1–15."
 
 
 def test_category_change_never_compares_against_no_data():
-    assert insights.category_change(frame(("A", 150, "Food")), frame(), 1) is None
+    assert insights.category_change(frame(("A", 150, "Food")), frame(), WINDOW) is None
 
 
 def test_category_change_counts_a_new_category():
-    found = insights.category_change(frame(("A", 25, "New")), frame(("A", 100, "Food")), 1)
+    found = insights.category_change(frame(("A", 25, "New")), frame(("A", 100, "Food")), WINDOW)
     assert found.data["category"] == "New"
+
+
+# Last period's total
+
+
+def test_last_total_gives_the_full_figure_without_judging():
+    found = insights.category_last_total(frame(("A", 100, "Shopping")), frame(("A", 75, "Shopping")), 1)
+    assert found.text == "You've spent $100.00 on Shopping so far. Last month's total was $75.00."
+    assert found.tone == "neutral"
+
+
+def test_last_total_says_period_for_custom_cycles():
+    assert "Last period's total" in insights.category_last_total(frame(("A", 100, "S")), frame(("A", 75, "S")), 15).text
+
+
+def test_last_total_needs_data_last_period_and_twenty_dollars():
+    assert insights.category_last_total(frame(("A", 100, "S")), frame(), 1) is None
+    assert insights.category_last_total(frame(("A", 100, "S")), frame(("A", 75, "Other")), 1) is None
+    assert insights.category_last_total(frame(("A", 19.99, "S")), frame(("A", 75, "S")), 1) is None
+    assert insights.category_last_total(frame(("A", 20, "S")), frame(("A", 75, "S")), 1) is not None
+
+
+def test_last_total_uses_the_largest_category_except_one_already_called_out():
+    now = frame(("A", 100, "Big"), ("B", 50, "Small"))
+    before = frame(("A", 75, "Big"), ("B", 40, "Small"))
+    assert insights.category_last_total(now, before, 1).data["category"] == "Big"
+    assert insights.category_last_total(now, before, 1, skip="Big").data["category"] == "Small"
+
+
+def test_the_reported_case_early_in_the_month():
+    """$100 on Nov 2, with $75 dated after Oct 2: no "Heads up", but last month's total is visible."""
+    now = frame(*[("A", 20, "Shopping")] * 5)
+    window = replace(WINDOW, today=date(2026, 11, 2), fair_end=date(2026, 10, 2))
+    found = insights.generate(now, frame(), frame(("A", 75, "Shopping")), Settings(), window)
+    assert [i.type for i in found] == ["category_last_total", "frequent_merchant"]
+    assert found[0].text == "You've spent $100.00 on Shopping so far. Last month's total was $75.00."
 
 
 # Frequent merchant
@@ -122,4 +161,4 @@ def test_budget_pace_is_pinned_then_by_impact_and_capped_at_three():
 @pytest.mark.parametrize("count, expected", [(4, False), (5, True)])
 def test_no_insights_until_five_expenses(count, expected):
     current = frame(*[("A", 100, "Other")] * count)
-    assert bool(insights.generate(current, frame(), Settings(monthly_budget=500), WINDOW)) is expected
+    assert bool(insights.generate(current, frame(), frame(), Settings(monthly_budget=500), WINDOW)) is expected

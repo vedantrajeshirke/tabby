@@ -16,12 +16,6 @@ def _between(df: pd.DataFrame, start: date, end: date) -> pd.DataFrame:
     return df[(df["date"] >= start.isoformat()) & (df["date"] <= end.isoformat())]
 
 
-def _short_range(start: date, end: date) -> str:
-    if start.month == end.month:
-        return f"{start:%b} {start.day}–{end.day}"
-    return f"{start:%b} {start.day} – {end:%b} {end.day}"
-
-
 def _has_synthetic(df: pd.DataFrame) -> bool:
     return bool(df["is_synthetic"].any())
 
@@ -62,7 +56,7 @@ def _comparison(current: pd.DataFrame, previous: pd.DataFrame, today: date, star
         })
     rows.sort(key=lambda row: (-max(row["current"], row["previous"]), row["category"]))
     return {
-        "label": f"{_short_range(start, today)} vs {_short_range(fair_start, fair_end)}",
+        "label": f"{periods.short_range(start, today)} vs {periods.short_range(fair_start, fair_end)}",
         "rows": rows,
         "includes_synthetic": _has_synthetic(current) or _has_synthetic(previous),
     }
@@ -125,7 +119,9 @@ def build(rows: list[dict], settings: Settings, today: date, hide_synthetic: boo
     fair_previous = _between(df, previous_start, fair_end)
     top = current.sort_values(["total", "id"], ascending=False).head(TOP_EXPENSES)
     # Budgets aren't stored per period, and insights talk about the period still under way.
-    found = insights.generate(current, fair_previous, settings, insights.Window(today, start, end)) if is_current else []
+    full_previous = _between(df, previous_start, previous_end)
+    window = insights.Window(today, start, end, previous_start, fair_end)
+    found = insights.generate(current, fair_previous, full_previous, settings, window) if is_current else []
 
     return {
         "period": {

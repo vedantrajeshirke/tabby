@@ -39,6 +39,12 @@ def period_label(start: date, end: date) -> str:
     return f"{start:%b} {start.day}, {start:%Y} – {end:%b} {end.day}, {end:%Y}"
 
 
+def short_range(start: date, end: date) -> str:
+    if start.month == end.month:
+        return f"{start:%b} {start.day}–{end.day}"
+    return f"{start:%b} {start.day} – {end:%b} {end.day}"
+
+
 def recent_periods(today: date, cycle_start_day: int, count: int = 12) -> list[dict]:
     """The current period and the ones before it, newest first."""
     periods = []

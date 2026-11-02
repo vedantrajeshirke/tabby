@@ -93,7 +93,7 @@ The browser tests use a throwaway stack with its own database and mock receipts,
 
 ## What's real, synthetic and deferred
 
-- **Implemented:** upload, OCR and PDF reading, review and confirm, validation, duplicates, categories, expense list, dashboard with four insight types, budget cycles, accounts, data separation and account deletion.
+- **Implemented:** upload, OCR and PDF reading, review and confirm, validation, duplicates, categories, expense list, dashboard with five insight types, budget cycles, accounts, data separation and account deletion.
 - **Synthetic:** demo data is labeled wherever it appears and can be hidden on the dashboard. **Settings → Remove synthetic demo data** deletes only those rows.
 - **Mocked:** only when `EXTRACTION_BACKEND=mock` is set, always with a visible banner.
 - **Deferred:** viewing and searching items on a bill, AI vision for harder photos, refunds, bank CSV import, other currencies, and roommate splits.

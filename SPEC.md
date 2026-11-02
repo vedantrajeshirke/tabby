@@ -361,7 +361,7 @@ Show a visible label **"Includes synthetic demo data"** on any chart whose data 
 
 **Empty state:** if there are fewer than 3 expenses in the current period, show a friendly message and a button to add an expense instead of empty charts.
 
-### 6.13 Insights (P0: four generators; P1: the rest)
+### 6.13 Insights (P0: five generators; P1: the rest)
 Each generator is a pure function that takes the expenses DataFrame and settings, and returns `Insight | None`:
 ```python
 @dataclass
@@ -376,7 +376,8 @@ class Insight:
 | Priority | Generator | Fires when | Template example |
 |---|---|---|---|
 | P0 | `budget_pace` | budget set and ≥ 3 days elapsed | "Hi {name}, you've spent ${spent} of your ${budget} budget with {days_left} days left — about ${safe_per_day}/day to stay on track." If the projected spend exceeds the budget: "At this pace you'll be about ${over} over budget." |
-| P0 | `category_change` | a category changed by ≥ $20 and ≥ 20% vs the fair previous window | "Restaurants & Cafes: ${current} so far, ${diff} more than this point last month." |
+| P0 | `category_change` | from day 7 of the period, a category rose by ≥ $20 and ≥ 20% vs the fair previous window | "Shopping: $100.00 so far (Nov 1–10), $40.00 more than Oct 1–10." |
+| P0 | `category_last_total` | a category is ≥ $20 this period and had spending last period; skips one `category_change` already called out | "You've spent $100.00 on Shopping so far. Last month's total was $75.00." (neutral: no claim about being ahead or behind) |
 | P0 | `frequent_merchant` | a merchant has ≥ 3 visits this period | "You've been to {merchant} {count} times this period (${total})." |
 | P0 | `small_purchases` | ≥ 5 expenses under $10 totaling ≥ $25 | "Purchases under $10 added up to ${total} across {count} items." |
 | P1 | `positive_change` | a category is down ≥ 20% and ≥ $20 | "Groceries are down ${diff} from this point last month. Nice." (tone: positive) |
@@ -507,7 +508,7 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 | M7 | Accounts and separation | Supabase JWT verification, row-level security, account deletion, the separation tests in section 9 passing |
 | M8 | Add expense | Sign-in, phone-first upload and confirm screens, issues and field reasons, extracted text, manual entry, category override |
 | M9 | Expenses list | Filter by period and category, edit, delete, view details and extracted text |
-| M10 | Dashboard + insights | `periods.py`, all P0 dashboard sections, 4 P0 insight generators with tests, empty states |
+| M10 | Dashboard + insights | `periods.py`, all P0 dashboard sections, 5 P0 insight generators with tests, empty states |
 | M11 | Settings + demo data | Settings page, seed script and buttons, synthetic labels and toggle, generated sample receipts |
 | M12 | Deploy + finish | Hosted on Vercel and the chosen API host, Playwright flow passing, README complete |
 

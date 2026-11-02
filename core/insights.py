@@ -12,7 +12,9 @@ from core.models import Settings
 MIN_EXPENSES = 5
 MAX_SHOWN = 3
 BUDGET_PACE_MIN_DAYS = 3
+CATEGORY_CHANGE_MIN_DAYS = 7  # a day or two of spending says nothing about a month
 CATEGORY_CHANGE_MIN_DOLLARS = 20
+LAST_TOTAL_MIN_DOLLARS = 20
 CATEGORY_CHANGE_MIN_RATIO = 0.20
 FREQUENT_VISITS = 3
 SMALL_PURCHASE_UNDER = 10
@@ -35,6 +37,8 @@ class Window:
     today: date
     start: date
     end: date
+    fair_start: date  # the same days of the previous period
+    fair_end: date
 
 
 def money(amount: float) -> str:
@@ -69,8 +73,10 @@ def budget_pace(current: pd.DataFrame, settings: Settings, window: Window) -> In
     return Insight("budget_pace", text, spent, tone, data)
 
 
-def category_change(current: pd.DataFrame, previous: pd.DataFrame, cycle_start_day: int) -> Insight | None:
+def category_change(current: pd.DataFrame, previous: pd.DataFrame, window: Window) -> Insight | None:
     """The largest rise. `previous` is the fair window: the same number of days into the last period."""
+    if periods.days_elapsed(window.today, window.start, window.end) < CATEGORY_CHANGE_MIN_DAYS:
+        return None
     if previous.empty:  # never compare against a period with no data
         return None
     now = current.groupby("category")["total"].sum()
@@ -85,9 +91,23 @@ def category_change(current: pd.DataFrame, previous: pd.DataFrame, cycle_start_d
     if best is None:
         return None
     category, amount, diff, earlier = best
-    last = "last month" if cycle_start_day == 1 else "last period"
-    text = f"{category}: {money(amount)} so far, {money(diff)} more than this point {last}."
+    now_range = periods.short_range(window.start, window.today)
+    then_range = periods.short_range(window.fair_start, window.fair_end)
+    text = f"{category}: {money(amount)} so far ({now_range}), {money(diff)} more than {then_range}."
     return Insight("category_change", text, diff, "warning", {"category": category, "current": amount, "previous": earlier, "diff": diff})
+
+
+def category_last_total(current: pd.DataFrame, full_previous: pd.DataFrame, cycle_start_day: int, skip: str | None = None) -> Insight | None:
+    """A plain reference point, with no claim about being ahead or behind. Skips a category already called out."""
+    now = current.groupby("category")["total"].sum().sort_values(ascending=False)
+    before = full_previous.groupby("category")["total"].sum()
+    for category, amount in now.items():
+        earlier = float(before.get(category, 0))
+        if category != skip and earlier > 0 and amount >= LAST_TOTAL_MIN_DOLLARS:
+            last = "Last month's" if cycle_start_day == 1 else "Last period's"
+            text = f"You've spent {money(float(amount))} on {category} so far. {last} total was {money(earlier)}."
+            return Insight("category_last_total", text, float(amount), "neutral", {"category": category, "current": float(amount), "previous_total": earlier})
+    return None
 
 
 def frequent_merchant(current: pd.DataFrame) -> Insight | None:
@@ -121,12 +141,14 @@ def rank(found: list[Insight | None]) -> list[Insight]:
     return (pinned + rest)[:MAX_SHOWN]
 
 
-def generate(current: pd.DataFrame, fair_previous: pd.DataFrame, settings: Settings, window: Window) -> list[Insight]:
+def generate(current: pd.DataFrame, fair_previous: pd.DataFrame, full_previous: pd.DataFrame, settings: Settings, window: Window) -> list[Insight]:
     if len(current) < MIN_EXPENSES:
         return []
+    change = category_change(current, fair_previous, window)
     return rank([
         budget_pace(current, settings, window),
-        category_change(current, fair_previous, settings.cycle_start_day),
+        change,
+        category_last_total(current, full_previous, settings.cycle_start_day, change.data["category"] if change else None),
         frequent_merchant(current),
         small_purchases(current),
     ])
