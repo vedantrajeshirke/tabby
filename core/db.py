@@ -101,6 +101,10 @@ def delete_user_data(conn: psycopg.Connection, user_id: str) -> None:
             conn.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
 
 
+def delete_synthetic(conn: psycopg.Connection, user_id: str) -> int:
+    return conn.execute("DELETE FROM expenses WHERE user_id = %s AND is_synthetic", (user_id,)).rowcount
+
+
 def load_settings(conn: psycopg.Connection, user_id: str) -> Settings:
     row = conn.execute(
         "SELECT name, monthly_budget::float8 AS monthly_budget, cycle_start_day FROM settings WHERE user_id = %s",

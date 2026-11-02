@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY api ./api
 COPY core ./core
 COPY config ./config
+COPY scripts ./scripts
 COPY fixtures/mock_extractions ./fixtures/mock_extractions
 
 RUN useradd --create-home app

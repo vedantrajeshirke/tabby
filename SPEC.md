@@ -387,7 +387,7 @@ class Insight:
 Ranking: `budget_pace` is always pinned first if it fires; the rest are sorted by `score` descending; show at most **3**. If fewer than 5 expenses exist in the period, show "Add a few more expenses to see insights." Never compare against a previous period that has no data. All numbers come from the generators.
 
 ### 6.14 Synthetic demo data (P0)
-`scripts/seed_synthetic.py` (also callable from Settings) generates ~3 previous periods of realistic student spending (groceries, cafes, delivery, transport, a rent transfer, subscriptions) with `is_synthetic = 1`. It must never touch real rows, and "Remove synthetic demo data" deletes only `is_synthetic = 1` rows. The UI labels synthetic rows and charts as described above. It only ever touches the current user's rows.
+`scripts/seed_synthetic.py` (also callable from Settings) generates ~3 previous periods, plus enough of the current one for the dashboard to show, of realistic student spending (groceries, cafes, delivery, transport, a rent transfer, subscriptions) with `is_synthetic = 1`. It must never touch real rows, and "Remove synthetic demo data" deletes only `is_synthetic = 1` rows. The UI labels synthetic rows and charts as described above. It only ever touches the current user's rows.
 
 ---
 

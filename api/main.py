@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import account, dashboard, expenses, extractions, settings, status
+from api.routes import account, dashboard, demo, expenses, extractions, settings, status
 from api.schemas import invalid_fields_message
 from core import db
 
@@ -55,5 +55,6 @@ app.include_router(status.router, prefix="/api")
 app.include_router(extractions.router, prefix="/api")
 app.include_router(expenses.router, prefix="/api")
 app.include_router(dashboard.router, prefix="/api")
+app.include_router(demo.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
 app.include_router(account.router, prefix="/api")

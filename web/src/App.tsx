@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { NavLink, Route, Routes, useLocation } from "react-router";
-import { getStatus, setAuthHandlers, type Status } from "./api";
+import { getSettings, getStatus, saveSettings, setAuthHandlers, type Status } from "./api";
 import NamePrompt from "./components/NamePrompt";
 import AddExpense from "./pages/AddExpense";
 import Dashboard from "./pages/Dashboard";
 import ExpenseDetailPage from "./pages/ExpenseDetail";
 import Expenses from "./pages/Expenses";
+import SettingsPage from "./pages/Settings";
 import SignIn from "./pages/SignIn";
 import { supabase } from "./supabase";
 
@@ -18,10 +19,10 @@ const ICONS = {
 };
 
 const PAGES = [
-  { path: "/", label: "Add", icon: ICONS.add, title: "Add Expense", next: "" },
-  { path: "/expenses", label: "Expenses", icon: ICONS.expenses, title: "Expenses", next: "" },
-  { path: "/dashboard", label: "Dashboard", icon: ICONS.dashboard, title: "Dashboard", next: "" },
-  { path: "/settings", label: "Settings", icon: ICONS.settings, title: "Settings", next: "Settings arrive in M11." },
+  { path: "/", label: "Add", icon: ICONS.add },
+  { path: "/expenses", label: "Expenses", icon: ICONS.expenses },
+  { path: "/dashboard", label: "Dashboard", icon: ICONS.dashboard },
+  { path: "/settings", label: "Settings", icon: ICONS.settings },
 ];
 
 function Icon({ path }: { path: string }) {
@@ -49,17 +50,6 @@ function Logo() {
       </span>
       SnapSpend
     </p>
-  );
-}
-
-function Placeholder({ title, next }: { title: string; next: string }) {
-  return (
-    <section>
-      <h1 className="text-3xl font-semibold tracking-tight text-pine">{title}</h1>
-      <div className="mt-6 rounded-2xl border border-line p-6">
-        <p className="text-muted">{next}</p>
-      </div>
-    </section>
   );
 }
 
@@ -118,14 +108,31 @@ export default function App() {
       key={session.user.id}
       status={status}
       name={name}
+      firstName={first ?? ""}
+      lastName={last ?? ""}
       email={session.user.email}
       onSignOut={() => void supabase?.auth.signOut()}
     />
   );
 }
 
-function Shell({ status, name, email, onSignOut }: { status: Status; name?: string; email?: string; onSignOut?: () => void }) {
+function Shell({ status, name, firstName = "", lastName = "", email, onSignOut }: {
+  status: Status;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  onSignOut?: () => void;
+}) {
   const { pathname } = useLocation();
+
+  // The greeting in insights comes from settings; a name given at sign-up starts it off.
+  useEffect(() => {
+    if (!firstName) return;
+    getSettings()
+      .then((settings) => (settings.name ? undefined : saveSettings({ ...settings, name: firstName })))
+      .catch(() => {}); // only a greeting, and the next visit tries again
+  }, [firstName]);
 
   return (
     <div className="min-h-dvh md:pl-60">
@@ -192,9 +199,10 @@ function Shell({ status, name, email, onSignOut }: { status: Status; name?: stri
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/expenses/:id" element={<ExpenseDetailPage />} />
             <Route path="/dashboard" element={<Dashboard />} />
-            {PAGES.slice(3).map((page) => (
-              <Route key={page.path} path={page.path} element={<Placeholder title={page.title} next={page.next} />} />
-            ))}
+            <Route
+              path="/settings"
+              element={<SettingsPage signedIn={Boolean(onSignOut)} firstName={firstName} lastName={lastName} />}
+            />
           </Routes>
         </main>
       </div>

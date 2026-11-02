@@ -214,3 +214,33 @@ export function deleteExpense(id: number): Promise<void> {
 export function getDashboard(clientToday: string, hideSynthetic: boolean, signal: AbortSignal): Promise<Dashboard> {
   return request(`/dashboard?client_today=${clientToday}&hide_synthetic=${hideSynthetic}`, { signal });
 }
+
+export type UserSettings = { name: string; monthly_budget: number | null; cycle_start_day: number };
+
+export function getSettings(): Promise<UserSettings> {
+  return request("/settings");
+}
+
+export function saveSettings(settings: UserSettings): Promise<UserSettings> {
+  return request("/settings", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(settings),
+  });
+}
+
+export function loadDemoData(clientToday: string): Promise<{ added: number }> {
+  return request(`/demo-data?client_today=${clientToday}`, { method: "POST" });
+}
+
+export function removeDemoData(): Promise<{ removed: number }> {
+  return request("/demo-data", { method: "DELETE" });
+}
+
+export function deleteAccount(): Promise<void> {
+  return request("/account", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: "DELETE" }),
+  });
+}
