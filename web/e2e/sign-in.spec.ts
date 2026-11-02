@@ -69,7 +69,9 @@ test("the app stays closed until sign-in, sends the token, and sign-out clears t
 test("creating an account sends the name", async ({ page }) => {
   await fakeBackends(page, []);
   let sent: Record<string, string> = {};
+  let signUps = 0;
   await page.route("**/fake-supabase/auth/v1/signup**", (route) => {
+    signUps += 1;
     sent = route.request().postDataJSON().data;
     return route.fulfill({
       json: { id: USER_ID, aud: "authenticated", email: EMAIL, app_metadata: {}, user_metadata: sent, created_at: "2026-01-01T00:00:00Z" },
@@ -80,9 +82,19 @@ test("creating an account sends the name", async ({ page }) => {
   await page.getByLabel("First name").fill("  Sam ");
   await page.getByLabel("Last name").fill("Example");
   await page.getByLabel("Email").fill(EMAIL);
-  await page.getByLabel("Password").fill("a-long-password");
+  await page.getByLabel("Password", { exact: true }).fill("a-long-password");
+
+  await page.getByLabel("Confirm password").fill("a-different-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("alert")).toContainText("Passwords don't match.");
+  await expect(page.getByLabel("Confirm password")).toBeFocused();
+  expect(signUps).toBe(0);
+
+  await page.getByLabel("Confirm password").fill("a-long-password");
+  await expect(page.getByRole("alert")).toHaveCount(0);
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByText("Check your email")).toBeVisible();
+  expect(signUps).toBe(1);
   expect(sent).toEqual({ first_name: "Sam", last_name: "Example" });
 });
 

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { googleEnabled } from "../supabase";
 
@@ -23,6 +23,9 @@ export default function SignIn({ client, recovering, onRecovered }: {
   const mode = recovering ? "new-password" : chosenMode;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [checkConfirm, setCheckConfirm] = useState(false);
+  const confirmInput = useRef<HTMLInputElement>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -31,12 +34,22 @@ export default function SignIn({ client, recovering, onRecovered }: {
 
   function switchTo(next: Mode) {
     setMode(next);
+    setConfirmPassword("");
+    setCheckConfirm(false);
     setError("");
     setNotice("");
   }
 
+  const needsConfirm = mode === "sign-up" || mode === "new-password";
+  const passwordsDiffer = needsConfirm && password !== confirmPassword;
+
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (passwordsDiffer) {
+      setCheckConfirm(true);
+      confirmInput.current?.focus();
+      return;
+    }
     setBusy(true);
     setError("");
     setNotice("");
@@ -86,7 +99,7 @@ export default function SignIn({ client, recovering, onRecovered }: {
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
       <aside className="hidden flex-col justify-between bg-pine p-12 text-white lg:flex">
-        <p className="text-lg font-semibold tracking-tight">Tabby</p>
+        <p className="text-3xl font-semibold tracking-tight">Tabby</p>
         <div>
           <p className="max-w-md text-4xl font-semibold tracking-tight">Snap a receipt. Check it. Know where your money went.</p>
           <p className="mt-4 max-w-md text-white/75">
@@ -98,7 +111,7 @@ export default function SignIn({ client, recovering, onRecovered }: {
 
       <main className="flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm">
-          <p className="mb-8 text-lg font-semibold tracking-tight text-pine lg:hidden">Tabby</p>
+          <p className="mb-8 text-2xl font-semibold tracking-tight text-pine lg:hidden">Tabby</p>
           <h1 className="text-3xl font-semibold tracking-tight text-pine">{TITLES[mode].title}</h1>
 
           {error && <p role="alert" className="mt-4 rounded-xl bg-expense-soft p-3 text-sm text-expense">{error}</p>}
@@ -161,6 +174,28 @@ export default function SignIn({ client, recovering, onRecovered }: {
                   className={inputClass}
                 />
               </label>
+            )}
+            {needsConfirm && (
+              <div>
+                <label className="block text-sm font-medium text-pine">
+                  Confirm password
+                  <input
+                    ref={confirmInput}
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onBlur={() => setCheckConfirm(confirmPassword !== "")}
+                    aria-invalid={checkConfirm && passwordsDiffer}
+                    aria-describedby={checkConfirm && passwordsDiffer ? "confirm-password-error" : undefined}
+                    className={inputClass}
+                  />
+                </label>
+                {checkConfirm && passwordsDiffer && (
+                  <p id="confirm-password-error" role="alert" className="mt-1 text-sm text-expense">Passwords don't match.</p>
+                )}
+              </div>
             )}
             <button
               type="submit"
