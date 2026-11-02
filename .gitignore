@@ -1,10 +1,26 @@
 .venv/
 __pycache__/
 *.pyc
-.env
 .pytest_cache/
+.DS_Store
+node_modules/
+dist/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.streamlit/secrets.toml
+
+# Personal data
 data/*
 !data/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+*.dump
 fixtures/demo_files/*
 !fixtures/demo_files/.gitkeep
-.DS_Store
+Case Study*.pdf

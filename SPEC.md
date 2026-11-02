@@ -2,7 +2,8 @@
 
 > **Working name:** SnapSpend
 > **Type:** Personal expense tracker (case-study prototype)
-> **Time budget:** ~4 hours of build time
+> **Stack:** React + FastAPI + Postgres, with Supabase for hosted accounts and files
+> **Time:** the brief asks for 2–4 hours. The owner has chosen to go past that, and the submission must state the real time spent.
 > **Audience for this doc:** Claude Code (the implementer) and the project owner
 
 ---
@@ -23,7 +24,7 @@ The prototype is part of a hiring case study. It **must**:
 4. **Clearly label** anything synthetic or mocked in the UI.
 
 ### Design principles
-- **Local and free.** Extraction runs on the user's machine using PDF text extraction, OCR, and a rule-based parser. No paid APIs, and receipt data never leaves the device.
+- **Free, and private by default.** Extraction uses PDF text extraction, OCR and a rule-based parser, with no paid APIs. In local mode receipt data never leaves the device. The hosted app stores it in the user's own account, and says so plainly.
 - **Explainable.** Every extracted field has a confidence level and a reason, and every number in the dashboard and insights is computed in code.
 - **The human confirms.** Nothing is saved without the user reviewing it.
 - **Fail loudly and helpfully.** Invalid input produces a clear message and a path forward (retry or manual entry), never a crash or silent bad data.
@@ -41,18 +42,19 @@ The prototype is part of a hiring case study. It **must**:
 - Validation checks with clear warnings/errors
 - Duplicate detection
 - Rule-based categorization with user overrides
-- Confirm/edit screen, then save to local SQLite
+- Confirm/edit screen, then save to the database
 - Manual entry fallback
 - Expense list (view, edit, delete)
 - Dashboard (budget pace, category split, month-over-month by category, top 5, avg daily spend)
 - Insights panel (top 3 computed insights, templated text)
 - Settings (name, monthly budget, budget cycle start day)
+- User accounts with saved data: sign-in, per-user separation, and deleting your own account and data
+- A hosted app, plus a local mode that needs no accounts
 - Synthetic seed data for past months, clearly labeled
 
 ### Out of scope (do NOT build)
-- User accounts / authentication / multi-user
 - Bank connections or bank CSV import (listed as a future step)
-- Cloud database (hosting the demo is in scope, see 6.15)
+- Sharing data between users, roles or admin screens
 - Paid AI APIs in the MVP (an AI backend is a stretch goal, section 10)
 - Email inbox parsing, forecasting, ML training, notifications, native mobile app
 - Tax features
@@ -65,34 +67,39 @@ The prototype is part of a hiring case study. It **must**:
 
 | Concern | Choice | Notes |
 |---|---|---|
-| Language | Python 3.11+ | |
-| UI | Streamlit (multipage) | Works in a phone browser too |
-| Storage | SQLite (`data/app.db`) | Via `sqlite3` stdlib; no ORM |
+| Front end | React, TypeScript, Vite, Tailwind | Phone-first. Charts with Plotly (`react-plotly.js`) |
+| Back end | Python 3.11+, FastAPI | Thin routes that call `core/` |
+| Database | Postgres via `psycopg` | Plain SQL, no ORM. Supabase hosted, Docker locally |
+| Accounts | Supabase Auth (Google and email/password) | Issues JWTs; the API verifies them |
+| Files | Supabase Storage hosted, local disk in local mode | Behind one interface; private, with short-lived links |
 | Images | Pillow + `pillow-heif` | HEIC support for iPhone photos |
-| PDF text | `pdfplumber` | Text layer extraction; `page.to_image()` to render pages for OCR when there's no text layer |
-| OCR | Tesseract via `pytesseract` | Requires the Tesseract binary installed on the system |
-| Data | pandas | Aggregations for dashboard/insights |
-| Charts | Plotly | |
-| Config | python-dotenv | `.env` for settings |
-| Tests | pytest | |
+| PDF text | `pdfplumber` | Text layer, and rendering pages for OCR |
+| OCR | Tesseract via `pytesseract` | Installed in the API's Docker image |
+| Data | pandas | Aggregations for dashboard and insights |
+| Hosting | Vercel (front end), Docker on Render or Fly.io (API) | Choose after checking current free-tier terms |
+| Tests | pytest (API and `core/`), Playwright (end to end) | |
 
 **Do not add other dependencies** without a clear reason noted in the README.
 
-### System requirement
-Tesseract must be installed:
-- Mac: `brew install tesseract`
-- Windows: install from the Tesseract installer (UB Mannheim build) and set `TESSERACT_CMD` in `.env` if it isn't on PATH
-- Linux: `sudo apt install tesseract-ocr`
+### Run modes
+- **Local:** `docker compose up` starts the front end, API and Postgres. `AUTH_MODE=local` uses one built-in demo user with no sign-in, and files stay on disk. No external account of any kind is needed, as the brief requires.
+- **Hosted:** `AUTH_MODE=supabase`. Every API request needs a valid JWT.
 
-On startup, check that Tesseract is available. If not, show a clear banner with install instructions and keep the rest of the app usable (manual entry, PDFs with text layers, dashboard).
+The API checks at startup that Tesseract is available. If it isn't, `GET /api/status` reports it, and the front end shows install instructions while everything else stays usable.
 
 ### Environment variables (`.env.example`)
 ```
 EXTRACTION_BACKEND=local    # local | mock
 TESSERACT_CMD=              # optional full path to the tesseract executable
 OCR_MIN_CONFIDENCE=50       # mean word confidence below this = unreadable
+AUTH_MODE=local             # local | supabase
+DATABASE_URL=               # Postgres connection string
+SUPABASE_URL=               # hosted only
+SUPABASE_SERVICE_KEY=       # hosted only, API server only, never sent to the browser
+FILE_STORAGE=local          # local | supabase
+CORS_ORIGINS=               # the front end's address
 ```
-When `EXTRACTION_BACKEND=mock`, show a visible **"MOCK MODE — extraction is simulated"** banner on the capture page.
+Secrets are never committed. When `EXTRACTION_BACKEND=mock`, show a visible **"MOCK MODE — extraction is simulated"** banner on the capture page.
 
 ---
 
@@ -100,38 +107,39 @@ When `EXTRACTION_BACKEND=mock`, show a visible **"MOCK MODE — extraction is si
 
 ```
 snapspend/
-├── app.py                     # Entry point, navigation, global banners
-├── pages/
-│   ├── 1_Add_Expense.py       # Capture → extract → confirm → save
-│   ├── 2_Expenses.py          # List, filter, edit, delete
-│   ├── 3_Dashboard.py         # Charts + insights
-│   └── 4_Settings.py          # Name, budget, cycle start day, demo data
-├── core/
-│   ├── db.py                  # Schema creation, CRUD
-│   ├── models.py              # Dataclasses: Expense, LineItem, Extraction, ValidationIssue
-│   ├── files.py               # Load image/PDF, EXIF-rotate, hash, render PDF pages
-│   ├── ocr.py                 # Image preprocessing + Tesseract (text, lines, confidence)
-│   ├── parser.py              # Raw text → Extraction (rule-based, with confidences)
-│   ├── extraction.py          # Backend interface: local | mock
-│   ├── validation.py          # Validation rules → list of issues
-│   ├── duplicates.py          # Duplicate detection
-│   ├── categorize.py          # Override → rule → default
-│   ├── periods.py             # Budget-cycle period helpers
-│   └── insights.py            # Insight generators, ranking, templates
-├── config/
-│   └── categories.json        # Category list + merchant keyword rules
-├── fixtures/
-│   ├── ocr_text/              # Raw receipt text samples for parser tests
-│   ├── mock_extractions/      # JSON results used in mock mode
-│   └── demo_files/            # Sample images/PDFs for the demo (owner adds real ones)
-├── scripts/
-│   └── seed_synthetic.py      # Seeds past months with synthetic data
-├── data/                      # gitignored: app.db, saved files
-├── tests/
-├── .env.example
-├── requirements.txt
-└── README.md
+├── api/
+│   ├── main.py                # App setup, CORS, routers
+│   ├── auth.py                # JWT verification → current user
+│   └── routes/                # expenses, extractions, settings, dashboard, account
+├── core/                      # Framework-free logic, kept from the Streamlit build
+│   ├── db.py                  # Schema, CRUD; every query takes user_id
+│   ├── models.py, files.py, ocr.py, parser.py, extraction.py
+│   ├── validation.py, duplicates.py, categorize.py, confirm.py
+│   ├── storage.py             # File storage interface: local | supabase
+│   ├── periods.py, insights.py
+├── web/                       # React app: pages for sign-in, add expense, expenses, dashboard, settings
+├── config/categories.json
+├── fixtures/                  # ocr_text, mock_extractions, sample_receipts (generated), demo_files (gitignored)
+├── scripts/seed_synthetic.py
+├── tests/                     # pytest; web/e2e holds Playwright tests
+├── docker-compose.yml, Dockerfile, .env.example, requirements.txt, README.md
 ```
+
+### API
+All routes need a signed-in user, apart from the status check. The user always comes from the token, never from the request body.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/status` | Tesseract available, mock mode, run mode |
+| `POST /api/extractions` | Upload a file; returns the extraction, issues, suggested category and duplicate warnings. Saves nothing |
+| `POST /api/validate` | Re-check edited form values |
+| `POST /api/expenses` | Save a confirmed expense, with its original file when there is one |
+| `GET /api/expenses`, `PATCH` / `DELETE /api/expenses/{id}` | List with period and category filters, edit, delete |
+| `GET /api/expenses/{id}/file` | Short-lived link to the original file |
+| `GET /api/dashboard` | All dashboard numbers and insights, computed on the server |
+| `GET` / `PUT /api/settings` | Name, budget, cycle start day |
+| `POST` / `DELETE /api/demo-data` | Load or remove synthetic data |
+| `DELETE /api/account` | Permanently delete the user's account, data and files |
 
 ---
 
@@ -165,10 +173,10 @@ snapspend/
    [Save]  or  [Discard]
         │
         ▼
-   Saved to SQLite → visible in Expenses list, Dashboard, Insights
+   Saved to the database → visible in Expenses list, Dashboard, Insights
 ```
 
-On mobile, use `st.file_uploader` (phones offer "Take Photo" in the native picker). Do **not** rely on `st.camera_input`, because browser camera access requires HTTPS when not on localhost.
+On mobile, use a standard file input that accepts images (phones offer "Take Photo" in the native picker). Do **not** rely on direct browser camera access.
 
 ---
 
@@ -180,7 +188,7 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
 - Accept `jpg`, `jpeg`, `png`, `webp`, `heic`, `pdf`. Max 10 MB. Reject other types with a clear message.
 - Compute a SHA-256 hash of the **original bytes** for exact-duplicate detection.
 - For PDFs, process up to the first 3 pages; concatenate their text.
-- Save the original file to `data/files/<hash>.<ext>` only after the user confirms.
+- Save the original file through `storage.py`, at `<user_id>/<hash>.<ext>`, only after the user confirms. The API keeps nothing from the extraction step, so the browser sends the file again on save.
 - An "Enter manually instead" button is always available and opens the same confirm form, empty.
 
 ### 6.2 Getting text (P0)
@@ -197,7 +205,7 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
 - Rebuild lines by grouping words on `(block_num, par_num, line_num)`.
 - Compute the **mean word confidence** over words with `conf >= 0`.
 - Return `OcrResult(text: str, lines: list[str], mean_confidence: float, source="ocr")`.
-- Typical runtime should be a few seconds. Cache results by file hash in `st.session_state` so Streamlit reruns don't re-run OCR.
+- Typical runtime should be a few seconds. The front end keeps the result while the user edits, so OCR doesn't re-run.
 
 ### 6.3 Parser (P0)
 `parser.py` turns raw text into an `Extraction`. It must be a set of **pure functions** with no I/O, so they're easy to unit test against `fixtures/ocr_text/*.txt`.
@@ -273,6 +281,7 @@ class ExtractionBackend(Protocol):
 **Errors** marked "blocks save" disable the Save button until fixed. V01/V02 show the manual entry option prominently. **Warnings** are shown in yellow but don't block saving.
 
 ### 6.6 Duplicate detection (P0)
+- Duplicates are only ever checked against the same user's expenses.
 - **Exact:** the file hash already exists in `expenses.file_hash` → warning: "You already added this file on <date>." with the option to continue anyway.
 - **Likely:** an existing expense with the same total (±$0.01), the same date, and a merchant that matches case-insensitively → warning: "Looks similar to an expense you already saved." Show that expense's summary.
 
@@ -373,28 +382,31 @@ class Insight:
 Ranking: `budget_pace` is always pinned first if it fires; the rest are sorted by `score` descending; show at most **3**. If fewer than 5 expenses exist in the period, show "Add a few more expenses to see insights." Never compare against a previous period that has no data. All numbers come from the generators.
 
 ### 6.14 Synthetic demo data (P0)
-`scripts/seed_synthetic.py` (also callable from Settings) generates ~3 previous periods of realistic student spending (groceries, cafes, delivery, transport, a rent transfer, subscriptions) with `is_synthetic = 1`. It must never touch real rows, and "Remove synthetic demo data" deletes only `is_synthetic = 1` rows. The UI labels synthetic rows and charts as described above.
+`scripts/seed_synthetic.py` (also callable from Settings) generates ~3 previous periods of realistic student spending (groceries, cafes, delivery, transport, a rent transfer, subscriptions) with `is_synthetic = 1`. It must never touch real rows, and "Remove synthetic demo data" deletes only `is_synthetic = 1` rows. The UI labels synthetic rows and charts as described above. It only ever touches the current user's rows.
 
 ---
 
-### 6.15 Hosted demo (P1)
-The app also runs on Streamlit Community Cloud as a public demo, with the same stack. `packages.txt` installs Tesseract, and dependency versions are pinned.
-- `HOSTED_DEMO=true` gives each browser session its own temporary database and files under `data/sessions/`, because there are no accounts. Session data older than a day is removed.
-- The hosted app says plainly that uploads are processed on a server, that data is temporary, and that real receipts shouldn't be uploaded. The local app keeps the on-device note.
-- Sample receipts for reviewers must contain no personal data, and are generated rather than copied from real receipts.
+### 6.15 Accounts and data separation (P0)
+- **Sign-in:** Supabase Auth, with Google and email/password. Supabase handles password storage, resets and token refresh. The React app sends the access token as a `Bearer` header, and the API verifies its signature, expiry and audience on every request.
+- **Separation, checked twice:** every query in `core/db.py` is scoped by a required `user_id` that comes from the verified token, and Postgres row-level security enforces the same rule. Requesting another user's expense returns 404. Files live under the user's own folder in a private bucket and open only through short-lived links.
+- **Deleting an account** removes the user's rows, files and sign-in.
+- **Storage size:** photos are stored as compressed JPEG (the free tier has 1 GB of file storage), while the file hash is still taken from the original bytes so duplicates are detected.
+- **Reviewers:** sample receipts in `fixtures/sample_receipts/` are generated and contain no personal data. New accounts start empty and can load labeled synthetic data from Settings.
+- **Availability:** free Supabase projects pause after a week of inactivity, and free API hosts may sleep. Wake and re-test the hosted app before any review.
 
 ---
 
-## 7. Data model (SQLite)
+## 7. Data model (Postgres)
 
 ```sql
 CREATE TABLE IF NOT EXISTS expenses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
   merchant TEXT NOT NULL,
-  date TEXT NOT NULL,                 -- YYYY-MM-DD
-  total REAL NOT NULL,                -- positive number, in `currency`
+  date DATE NOT NULL,
+  total NUMERIC(12,2) NOT NULL,       -- positive number, in `currency`
   currency TEXT NOT NULL DEFAULT 'USD',
-  subtotal REAL, tax REAL, tip REAL,
+  subtotal NUMERIC(12,2), tax NUMERIC(12,2), tip NUMERIC(12,2),
   category TEXT NOT NULL,
   category_source TEXT NOT NULL,      -- override | doc_type | rule | default | manual
   payment_method TEXT,
@@ -402,39 +414,43 @@ CREATE TABLE IF NOT EXISTS expenses (
   note TEXT,
   file_path TEXT,
   file_hash TEXT,
-  extraction_json TEXT,               -- full extraction incl. raw_text, for traceability
-  is_synthetic INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS line_items (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  expense_id INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  quantity REAL,
-  price REAL
+  extraction_json JSONB,              -- full extraction incl. raw_text and items, for traceability
+  is_synthetic BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS merchant_overrides (
-  merchant_key TEXT PRIMARY KEY,      -- normalized uppercase merchant
-  category TEXT NOT NULL
+  user_id UUID NOT NULL,
+  merchant_key TEXT NOT NULL,         -- normalized uppercase merchant
+  category TEXT NOT NULL,
+  PRIMARY KEY (user_id, merchant_key)
 );
 
 CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT
+  user_id UUID PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  monthly_budget NUMERIC(12,2),
+  cycle_start_day INTEGER NOT NULL DEFAULT 1 CHECK (cycle_start_day BETWEEN 1 AND 28)
 );
-CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
-CREATE INDEX IF NOT EXISTS idx_expenses_hash ON expenses(file_hash);
+CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_expenses_user_hash ON expenses(user_id, file_hash);
 ```
-Enable `PRAGMA foreign_keys = ON`. Merchant normalization for matching: uppercase, trim, collapse whitespace, strip trailing store numbers (`#1234`) and common prefixes (`SQ *`, `TST*`).
+Row-level security is enabled on all three tables, limiting each row to its owner. The `line_items` table is dropped, because items are future scope and stay inside `extraction_json`. Merchant normalization for matching: uppercase, trim, collapse whitespace, strip trailing store numbers (`#1234`) and common prefixes (`SQ *`, `TST*`).
 
 ---
 
 ## 8. Privacy and safety
-- When run locally, everything stays on the device. Files and data stay in `data/` (gitignored); nothing is sent to external services. The hosted demo processes uploads on its server (see 6.15).
-- Never log raw text or file contents; log errors only.
-- Show a one-line note on the capture page: "Your receipts are processed and stored only on this device." (locally), or the hosted notice from 6.15.
+- **Local mode:** everything stays on the device, and nothing is sent to external services. The capture page says: "Your receipts are processed and stored only on this device."
+- **Hosted mode:** receipts are stored with Supabase and processed on the API server. The capture page says: "Your receipts are stored in your private account on our hosting providers. Delete your account at any time to remove them."
+- Never log raw text, file contents or tokens; log errors only.
+- **Keep less:** before anything is stored, strip all photo metadata, including GPS location (real iPhone photos contain it), by re-encoding the image. Mask card numbers, long digit runs, and login or password lines in `raw_text`. The hash is still taken from the original bytes.
+- **Never in logs or error reports:** receipt fields, merchants, amounts, emails, file names, tokens, signed links, or request bodies. Errors returned to the browser never include stack traces or internal details.
+- **Browser:** API responses carry `Cache-Control: no-store`, tokens never appear in URLs, and a Content Security Policy limits what scripts can run. No third-party analytics, ads or error trackers. Signing out clears cached receipt data.
+- **Never in the repo or images:** `.env` files, keys, real receipts and databases. `.gitignore` and `.dockerignore` both exclude them, and a test fails if a tracked file breaks this rule.
+- **Before the first push:** remove the personal email from commit history (use GitHub's private noreply address), and scan the full history for secrets.
+- **Demos:** the video and hosted demos use only generated sample receipts and synthetic data, with no real account details or keys on screen.
+- HTTPS everywhere in hosted mode. The API accepts requests from the front end's address only, and limits upload rate per user.
+- Secrets live in the host's settings and never in git or the browser, apart from Supabase's public anon key.
 
 ---
 
@@ -460,6 +476,10 @@ Enable `PRAGMA foreign_keys = ON`. Merchant normalization for matching: uppercas
 - `periods.py`: cycle start day 1 and 15; month boundaries; February.
 - `insights.py`: each P0 generator fires and doesn't fire at its thresholds; ranking pins `budget_pace` and caps at 3; empty state.
 
+- **Accounts and separation (must pass, run against real Postgres):** requests without a token, with an expired token, or with a bad signature get 401. User B can't read, edit, delete, or get the file of User A's expense. Duplicates, overrides, settings, dashboard totals and demo-data removal never cross users. Row-level security blocks access even when a query omits its filter. Deleting an account removes that user's rows and files and nobody else's.
+- **API:** each route's success path and its helpful error paths; nothing is saved by `POST /api/extractions`.
+- **End to end (Playwright):** upload → confirm → saved → visible in the list and dashboard, on desktop and phone sizes.
+
 ### Demo scenarios (document in the README)
 1. **Representative (photo):** a grocery receipt photo → OCR → parsed fields with reasons → category from a rule → confirm → dashboard and insights update.
 2. **Representative (PDF):** a digital receipt PDF → text extracted directly → confirm → saved.
@@ -474,21 +494,25 @@ Enable `PRAGMA foreign_keys = ON`. Merchant normalization for matching: uppercas
 
 ## 10. Build order (milestones)
 
+**Done on the earlier Streamlit build:** M1 skeleton, M2 extraction, M3 validation/categorization/duplicates, M4 confirm-and-save logic. `core/` carries over; the Streamlit pages and `ui.py` are removed in M5 and remain in git history.
+
 Work through these in order. Finish each milestone's acceptance criteria and run the tests before moving on. **Keep the app runnable after every milestone.**
 
-| # | Milestone | Acceptance criteria | ~Time |
-|---|---|---|---|
-| M1 | Skeleton | Project structure, requirements, `.env.example`, DB schema created on startup, multipage app runs with empty pages, settings save and load, Tesseract availability check with a banner | 20 min |
-| M2 | Extraction | `files.py` (image + PDF loading, hashing, PDF text and render), `ocr.py`, `parser.py` with fixture-based tests passing, backend interface with local and mock backends | 75 min |
-| M3 | Validate + categorize + duplicates | `validation.py`, `categorize.py`, `duplicates.py` with unit tests passing | 30 min |
-| M4 | Confirm and save | Confirm screen with an editable form, issues and field reasons shown, extracted-text panel, Save disabled on blocking errors, manual entry, "always use this category" override, saved file, per-session data in hosted mode | 30 min |
-| M5 | Expenses list | Filter by period and category, edit, delete, view file | 15 min |
-| M6 | Dashboard + insights | `periods.py`, all P0 dashboard sections, 4 P0 insight generators with tests, empty states | 45 min |
-| M7 | Synthetic data + polish + hosting | Seed script and Settings buttons, synthetic labels/toggle, generated sample receipts, README with setup and demo scenarios, deployment to Streamlit Community Cloud | 30 min |
+| # | Milestone | Acceptance criteria |
+|---|---|---|
+| M5 | New foundation | Repo restructured, `docker compose up` runs React, FastAPI and Postgres, `core/db.py` on Postgres with `user_id`, existing tests passing |
+| M6 | API | Extract, validate, save, list, edit, delete, file and settings routes, using the local demo user, with tests |
+| M7 | Accounts and separation | Supabase JWT verification, row-level security, storage interface with both backends, account deletion, the separation tests in section 9 passing |
+| M8 | Add expense | Sign-in, phone-first upload and confirm screens, issues and field reasons, extracted text, manual entry, category override |
+| M9 | Expenses list | Filter by period and category, edit, delete, view the original file |
+| M10 | Dashboard + insights | `periods.py`, all P0 dashboard sections, 4 P0 insight generators with tests, empty states |
+| M11 | Settings + demo data | Settings page, seed script and buttons, synthetic labels and toggle, generated sample receipts |
+| M12 | Deploy + finish | Hosted on Vercel and the chosen API host, Playwright flow passing, README complete |
 
-If time is running out, cut in this order: monthly trend line → expense list editing. **Never cut:** the confirm step, validation, field confidence/reasons, mock labeling, or invalid-input handling.
+**Never cut:** the confirm step, validation, field confidence/reasons, mock labeling, invalid-input handling, or the separation tests.
 
-### Stretch (P2, only after M7)
+### Stretch (P2, only after M12)
+- **Viewing and searching the items on a bill**, which the owner wants next: see what was bought on a given day, and search across bills.
 - **AI vision backend** (`EXTRACTION_BACKEND=claude` or `ollama`) implementing the same `ExtractionBackend` interface and returning the same `Extraction` model. Then a small script that runs every file in `fixtures/demo_files/` through both backends and reports field accuracy and seconds per file, for the case-study write-up.
 - Item name normalization and the `repeat_item` insight.
 - Home-currency display.
@@ -496,22 +520,25 @@ If time is running out, cut in this order: monthly trend line → expense list e
 ---
 
 ## 11. README must include
-- What the app does, in 2–3 sentences
-- Setup: install Tesseract (per OS), `python -m venv .venv`, `pip install -r requirements.txt`, copy `.env.example` to `.env`, `streamlit run app.py`
-- How to use it from a phone on the same Wi-Fi (`streamlit run app.py --server.address 0.0.0.0`, then open the laptop's IP on port 8501 and use the upload button's "Take Photo" option)
+- What the app does, in 2–3 sentences, and a link to the hosted app
+- Local setup with `docker compose up`, needing no accounts, and optional setup without Docker (including installing Tesseract per OS)
+- Hosted setup: Supabase project, Google sign-in, environment variables, deployment
+- How to use it from a phone
 - How extraction works (PDF text → OCR → parser) and mock mode
-- The demo scenarios from section 9
-- What's synthetic or mocked, and how to remove it
+- How accounts and data separation work
+- Dependencies, sample data, example inputs and their expected outputs, and the demo scenarios from section 9
+- What's implemented, what's synthetic or mocked and how to remove it, and what's deferred
+- Time spent, how AI was used and how its output was checked, and any prior work reused
 - Known limitations and next steps: AI vision backend, bank CSV import, viewing and searching the items on a bill, refunds, receipt line item insights, home-currency view, roommate splits
 
 ---
 
 ## 12. Instructions for Claude Code
-- The case-study brief also requires these in the README: sample data, example inputs with expected outputs, time spent, how AI was used and checked, and what is implemented, mocked or deferred.
+- The case-study brief also requires: a working prototype, its source code, an explanation of up to four pages, and a 5–10 minute video walkthrough. The owner writes the explanation and records the video.
 - Read this whole spec before writing code. Follow the milestone order in section 10.
 - Ask before changing scope, adding dependencies, or deviating from the data model.
-- Keep functions small and pure in `core/` (especially `parser.py`); keep Streamlit pages thin (UI only, calling `core/`).
-- Cache extraction results by file hash in `st.session_state` so a Streamlit rerun doesn't redo OCR for the same file.
+- Keep functions small and pure in `core/` (especially `parser.py`); keep API routes and React pages thin. No framework imports in `core/`.
 - Every user-facing error message should say what happened **and** what to do next.
+
 - Every number shown to the user must be computed in code from stored data.
-- After each milestone, run `pytest` and give a 2–3 line summary of what's done and what's next.
+- After each milestone, run the tests and give a 2–3 line summary of what's done and what's next.
