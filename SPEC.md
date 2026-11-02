@@ -78,6 +78,7 @@ The prototype is part of a hiring case study. It **must**:
 | OCR | Tesseract via `pytesseract` | Installed in the API's Docker image |
 | Data | pandas | Aggregations for dashboard and insights |
 | Hosting | Vercel (front end), Docker on Render or Fly.io (API) | Choose after checking current free-tier terms |
+| Tokens | PyJWT with `cryptography`, `httpx` | Verifying tokens, and removing a sign-in on account deletion |
 | Tests | pytest (API and `core/`), Playwright (end to end) | |
 
 **Do not add other dependencies** without a clear reason noted in the README.
@@ -93,10 +94,10 @@ The API checks at startup that Tesseract is available. If it isn't, `GET /api/st
 EXTRACTION_BACKEND=local    # local | mock
 TESSERACT_CMD=              # optional full path to the tesseract executable
 OCR_MIN_CONFIDENCE=50       # mean word confidence below this = unreadable
-AUTH_MODE=local             # local | supabase
+AUTH_MODE=local             # local = demo user, no sign-in; if unset, sign-in is required
 DATABASE_URL=               # Postgres connection string
 SUPABASE_URL=               # hosted only
-SUPABASE_SERVICE_KEY=       # hosted only, API server only, never sent to the browser
+SUPABASE_SECRET_KEY=        # hosted only, API server only, never sent to the browser
 CORS_ORIGINS=               # the front end's address
 ```
 Secrets are never committed. When `EXTRACTION_BACKEND=mock`, show a visible **"MOCK MODE — extraction is simulated"** banner on the capture page.
@@ -385,8 +386,8 @@ Ranking: `budget_pace` is always pinned first if it fires; the rest are sorted b
 ---
 
 ### 6.15 Accounts and data separation (P0)
-- **Sign-in:** Supabase Auth, with Google and email/password. Supabase handles password storage, resets and token refresh. The React app sends the access token as a `Bearer` header, and the API verifies its signature, expiry and audience on every request.
-- **Separation, checked twice:** every query in `core/db.py` is scoped by a required `user_id` that comes from the verified token, and Postgres row-level security enforces the same rule. Requesting another user's expense returns 404.
+- **Sign-in:** Supabase Auth, with Google and email/password. Supabase handles password storage, resets and token refresh. The React app sends the access token as a `Bearer` header, and the API verifies its signature against the project's public keys (ES256 or RS256; the legacy shared secret isn't supported), plus expiry, issuer, audience and role, on every request. If `AUTH_MODE` is unset or sign-in is misconfigured, the API refuses all data requests.
+- **Separation, checked twice:** every query in `core/db.py` is scoped by a required `user_id` that comes from the verified token, and Postgres row-level security enforces the same rule: each request runs as a restricted role limited to that user's rows. The browser never queries the database directly. Requesting another user's expense returns 404.
 - **Deleting an account** removes the user's rows and sign-in.
 - **Reviewers:** sample receipts in `fixtures/sample_receipts/` are generated and contain no personal data. New accounts start empty and can load labeled synthetic data from Settings.
 - **Availability:** free Supabase projects pause after a week of inactivity, and free API hosts may sleep. Wake and re-test the hosted app before any review.

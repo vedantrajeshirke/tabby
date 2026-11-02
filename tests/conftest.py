@@ -21,5 +21,6 @@ def conn():
     connection.execute(f"SET search_path TO {schema}")
     db.init_db(connection)
     yield connection
+    connection.execute("RESET ROLE")
     connection.execute(f"DROP SCHEMA {schema} CASCADE")
     connection.close()

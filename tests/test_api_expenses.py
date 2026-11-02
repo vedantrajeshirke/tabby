@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from api import deps
+from api import deps, rate_limit
 from api.main import app
 from core import db
 from core import files
@@ -22,8 +22,14 @@ def api(conn, monkeypatch):
     monkeypatch.setenv("EXTRACTION_BACKEND", "local")
     monkeypatch.setenv("AUTH_MODE", "local")
     state = {"user": USER_A}
+    rate_limit.reset()
+
+    def conn_as_user():
+        db.act_as(conn, state["user"])  # runs under row-level security, as in production
+        return conn
+
     app.dependency_overrides[deps.current_user] = lambda: state["user"]
-    app.dependency_overrides[deps.get_conn] = lambda: conn
+    app.dependency_overrides[deps.get_conn] = conn_as_user
     client = TestClient(app, raise_server_exceptions=False)
     client.state = state
     client.db = conn
@@ -312,6 +318,26 @@ def test_settings_and_overrides_stay_separate(api):
 
 def test_user_id_in_a_request_is_refused(api):
     assert post_expense(api, user_id=USER_B).status_code == 422
+
+
+def test_upload_rate_limit_is_per_user(api, monkeypatch):
+    monkeypatch.setattr(rate_limit, "MAX_UPLOADS", 2)
+    assert extract(api).status_code == 200
+    assert extract(api).status_code == 200
+    response = extract(api)
+    assert response.status_code == 429
+    assert "Wait a minute" in response.json()["detail"]
+    api.state["user"] = USER_B
+    assert extract(api).status_code == 200
+
+
+def test_rate_limit_window_expires():
+    rate_limit.reset()
+    for _ in range(rate_limit.MAX_UPLOADS):
+        assert rate_limit.allow_upload("u", now=0.0)
+    assert not rate_limit.allow_upload("u", now=59.0)
+    assert rate_limit.allow_upload("u", now=60.0)
+    rate_limit.reset()
 
 
 # Protection

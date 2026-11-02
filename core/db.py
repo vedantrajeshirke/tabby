@@ -2,6 +2,7 @@
 from dataclasses import asdict
 
 import psycopg
+from psycopg import sql
 from psycopg.rows import dict_row
 
 from core.categorize import normalize_merchant
@@ -46,6 +47,15 @@ CREATE INDEX IF NOT EXISTS idx_expenses_user_hash ON expenses(user_id, file_hash
 ALTER TABLE expenses DROP COLUMN IF EXISTS file_path;
 """
 
+APP_ROLE = "snapspend_app"
+USER_TABLES = ("expenses", "merchant_overrides", "settings")
+CREATE_APP_ROLE = f"""
+DO $$ BEGIN
+  CREATE ROLE {APP_ROLE} NOLOGIN NOSUPERUSER NOBYPASSRLS;
+EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL;
+END $$;
+"""
+
 # Dates and amounts come back as plain strings and floats, the types the rest of core uses.
 EXPENSE_COLUMNS = """
   id, user_id::text AS user_id, merchant, date::text AS date, total::float8 AS total, currency,
@@ -60,8 +70,35 @@ def connect(conninfo: str | None = None) -> psycopg.Connection:
 
 
 def init_db(conn: psycopg.Connection) -> None:
-    """Create the schema if it doesn't exist. Safe to call on every startup."""
+    """Create the schema and row-level security. Safe to call on every startup."""
     conn.execute(SCHEMA)
+    conn.execute(CREATE_APP_ROLE)
+    conn.execute(f"GRANT {APP_ROLE} TO CURRENT_USER")
+    schema = sql.Identifier(conn.execute("SELECT current_schema() AS s").fetchone()["s"])
+    conn.execute(sql.SQL("GRANT USAGE ON SCHEMA {} TO " + APP_ROLE).format(schema))
+    conn.execute(sql.SQL("GRANT USAGE ON ALL SEQUENCES IN SCHEMA {} TO " + APP_ROLE).format(schema))
+    for table in USER_TABLES:
+        conn.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON {table} TO {APP_ROLE}")
+        conn.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        conn.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
+        conn.execute(f"DROP POLICY IF EXISTS own_rows ON {table}")
+        conn.execute(
+            f"CREATE POLICY own_rows ON {table} TO {APP_ROLE} "
+            "USING (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid) "
+            "WITH CHECK (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid)"
+        )
+
+
+def act_as(conn: psycopg.Connection, user_id: str) -> None:
+    """Limit this connection to one user's rows, so even a query missing its filter can't cross users."""
+    conn.execute(f"SET ROLE {APP_ROLE}")
+    conn.execute("SELECT set_config('app.user_id', %s, false)", (user_id,))
+
+
+def delete_user_data(conn: psycopg.Connection, user_id: str) -> None:
+    with conn.transaction():
+        for table in USER_TABLES:
+            conn.execute(f"DELETE FROM {table} WHERE user_id = %s", (user_id,))
 
 
 def load_settings(conn: psycopg.Connection, user_id: str) -> Settings:

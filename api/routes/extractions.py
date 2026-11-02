@@ -2,6 +2,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 
+from api import rate_limit
 from api.deps import current_user, get_conn
 from api.schemas import ExpenseForm
 from core import confirm, expenses, files
@@ -29,6 +30,8 @@ async def create_extraction(
     conn=Depends(get_conn),
 ) -> dict:
     """Read a file and report on it. The file is discarded; only its hash goes back to the browser."""
+    if not rate_limit.allow_upload(user_id):
+        raise HTTPException(status_code=429, detail="That's a lot of uploads at once. Wait a minute, then try again.")
     data, filename = await read_upload(file)
     extraction = get_backend().extract(data, filename)
     file_hash = files.file_hash(data)

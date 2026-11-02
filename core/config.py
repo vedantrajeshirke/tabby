@@ -18,8 +18,10 @@ class Config:
     extraction_backend: str
     tesseract_cmd: str
     ocr_min_confidence: float
-    auth_mode: str = "local"
+    auth_mode: str = "supabase"
     database_url: str = ""  # empty = use the standard PG* environment variables
+    supabase_url: str = ""
+    supabase_secret_key: str = ""
 
 
 def _env(name: str, default: str = "") -> str:
@@ -35,8 +37,11 @@ def load_config() -> Config:
         extraction_backend=_env("EXTRACTION_BACKEND", "local").lower() or "local",
         tesseract_cmd=_env("TESSERACT_CMD"),
         ocr_min_confidence=min_conf,
-        auth_mode=_env("AUTH_MODE", "local").lower() or "local",
+        # Sign-in is required unless local mode is chosen explicitly, so a forgotten setting can't open the app.
+        auth_mode=_env("AUTH_MODE", "supabase").lower() or "supabase",
         database_url=os.getenv("DATABASE_URL", "").strip(),
+        supabase_url=_env("SUPABASE_URL").rstrip("/"),
+        supabase_secret_key=os.getenv("SUPABASE_SECRET_KEY", "").strip(),
     )
 
 
