@@ -14,10 +14,11 @@ const TITLES: Record<Mode, { title: string; action: string }> = {
 const MIN_PASSWORD = 8;
 const inputClass = "mt-1 w-full rounded-xl border border-line px-3 py-2.5 text-base focus:border-forest";
 
-export default function SignIn({ client, recovering, onRecovered }: {
+export default function SignIn({ client, recovering, onRecovered, confirmation }: {
   client: SupabaseClient;
   recovering: boolean;
   onRecovered: () => void;
+  confirmation: "confirmed" | "failed" | null;
 }) {
   const [chosenMode, setMode] = useState<Mode>("sign-in");
   const mode = recovering ? "new-password" : chosenMode;
@@ -29,8 +30,8 @@ export default function SignIn({ client, recovering, onRecovered }: {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [error, setError] = useState(confirmation === "failed" ? "That confirmation link has expired or was already used. Try signing in, or create your account again." : "");
+  const [notice, setNotice] = useState(confirmation === "confirmed" ? "Your email is confirmed. Sign in to continue." : "");
 
   function switchTo(next: Mode) {
     setMode(next);
@@ -62,7 +63,7 @@ export default function SignIn({ client, recovering, onRecovered }: {
           email,
           password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: `${window.location.origin}/?confirmed=1`,
             data: { first_name: firstName.trim(), last_name: lastName.trim() },
           },
         });

@@ -61,12 +61,20 @@ function Notice({ children }: { children: string }) {
   );
 }
 
+// Set by the link in a confirmation email. Supabase adds error details if the link is no longer valid.
+function confirmationResult(): "confirmed" | "failed" | null {
+  if (new URLSearchParams(window.location.search).get("confirmed") !== "1") return null;
+  const details = window.location.search + window.location.hash;
+  return /[?&#]error(_code|_description)?=/.test(details) ? "failed" : "confirmed";
+}
+
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const [apiError, setApiError] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
   const [sessionLoaded, setSessionLoaded] = useState(false);
   const [recovering, setRecovering] = useState(false);
+  const [confirmation] = useState(confirmationResult);
 
   useEffect(() => {
     getStatus().then(setStatus).catch(() => setApiError(true));
@@ -80,8 +88,11 @@ export default function App() {
       async () => (await client.auth.getSession()).data.session?.access_token ?? null,
       () => void client.auth.signOut({ scope: "local" }),
     );
-    client.auth.getSession().then(({ data }) => {
-      setSession(data.session);
+    client.auth.getSession().then(async ({ data }) => {
+      // Confirming an email signs the browser in, but people should sign in themselves first.
+      if (confirmation && data.session) await client.auth.signOut({ scope: "local" });
+      if (confirmation) window.history.replaceState(null, "", window.location.pathname);
+      setSession(confirmation ? null : data.session);
       setSessionLoaded(true);
     });
     const { data } = client.auth.onAuthStateChange((event, next) => {
@@ -89,7 +100,7 @@ export default function App() {
       setSession(next);
     });
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [confirmation]);
 
   if (apiError) return <Notice>Can't reach the Tabby API. Check that it's running, then refresh this page.</Notice>;
   if (!status) return null;
@@ -98,7 +109,7 @@ export default function App() {
   if (!supabase) return <Notice>Sign-in isn't set up on this site yet, so your data can't be opened.</Notice>;
   if (!sessionLoaded) return null;
   if (!session || recovering) {
-    return <SignIn client={supabase} recovering={recovering} onRecovered={() => setRecovering(false)} />;
+    return <SignIn client={supabase} recovering={recovering} onRecovered={() => setRecovering(false)} confirmation={confirmation} />;
   }
   // Keyed by user, so nothing from one account's screens can carry over to the next.
   const { first_name: first, last_name: last, full_name: full } = session.user.user_metadata;

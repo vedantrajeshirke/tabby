@@ -98,6 +98,59 @@ test("creating an account sends the name", async ({ page }) => {
   expect(sent).toEqual({ first_name: "Sam", last_name: "Example" });
 });
 
+test("confirming an email leads to the sign-in page, not into the app", async ({ page }) => {
+  await fakeBackends(page, []);
+  let redirect = "";
+  await page.route("**/fake-supabase/auth/v1/signup**", (route) => {
+    redirect = new URL(route.request().url()).searchParams.get("redirect_to") ?? "";
+    return route.fulfill({
+      json: { id: USER_ID, aud: "authenticated", email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" },
+    });
+  });
+  await page.goto(APP);
+  await page.getByRole("button", { name: "Create an account" }).click();
+  await page.getByLabel("First name").fill("Sam");
+  await page.getByLabel("Last name").fill("Example");
+  await page.getByLabel("Email").fill(EMAIL);
+  await page.getByLabel("Password", { exact: true }).fill("a-long-password");
+  await page.getByLabel("Confirm password").fill("a-long-password");
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByText("Check your email")).toBeVisible();
+  expect(redirect).toBe(`${new URL(APP).origin}/?confirmed=1`);
+
+  let exchanged = false;
+  await page.route("**/fake-supabase/auth/v1/token**", (route) => {
+    exchanged = true;
+    return route.fulfill({
+      json: {
+        access_token: TOKEN,
+        refresh_token: "made-up-refresh-token",
+        token_type: "bearer",
+        expires_in: 3600,
+        expires_at: Math.floor(Date.now() / 1000) + 3600,
+        user: { id: USER_ID, aud: "authenticated", email: EMAIL, app_metadata: { provider: "email", providers: ["email"] }, user_metadata: { first_name: "Sam", last_name: "Example" }, created_at: "2026-01-01T00:00:00Z" },
+      },
+    });
+  });
+  await page.goto(`${APP}?confirmed=1&code=made-up-code`);
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Your email is confirmed");
+  await expect(page).toHaveURL(APP);
+  expect(exchanged).toBe(true);
+
+  await page.reload(); // the session from the link really is gone
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page.getByText("Your email is confirmed")).toHaveCount(0);
+});
+
+test("an expired confirmation link says so on the sign-in page", async ({ page }) => {
+  await fakeBackends(page, []);
+  await page.goto(`${APP}?confirmed=1#error=access_denied&error_code=otp_expired`);
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("expired or was already used");
+  await expect(page).toHaveURL(APP);
+});
+
 test("an account without a name is asked once, then shows the name instead of the email", async ({ page }) => {
   await fakeBackends(page, []);
   await page.route("**/fake-supabase/auth/v1/user**", (route) =>
