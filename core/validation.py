@@ -7,8 +7,8 @@ AMOUNT_TOLERANCE = 0.05
 MAX_AGE_DAYS = 365
 BLOCKING_CODES = {"V03", "V04", "V06"}
 DOCUMENT_ERRORS = {
-    "not_an_expense": ("V01", "This doesn't look like a receipt or payment. Try another file or enter it manually."),
-    "unreadable": ("V02", "Couldn't read this image clearly. Retake the photo or enter it manually."),
+    "not_an_expense": ("V01", "Couldn't find any amounts, so this may not be a receipt. Upload a clearer photo or enter it manually."),
+    "unreadable": ("V02", "Couldn't read this clearly enough to fill it in. Upload a clearer photo or enter it manually."),
 }
 
 

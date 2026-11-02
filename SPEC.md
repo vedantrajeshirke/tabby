@@ -39,6 +39,7 @@ The prototype is part of a hiring case study. It **must**:
 - Upload a receipt photo, a digital receipt PDF, or a payment/order screenshot
 - Local extraction: PDF text layer → OCR fallback → rule-based parser with per-field confidence
 - Mock extraction mode for development and tests
+- Photo tips on the capture page (flat, bright, close up, receipt filling the frame)
 - Validation checks with clear warnings/errors
 - Duplicate detection
 - Rule-based categorization with user overrides
@@ -237,7 +238,7 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
 
 | Field | Rule | Confidence |
 |---|---|---|
-| `document_type` | `unreadable` if < 20 alphanumeric chars, or if `text_confidence < OCR_MIN_CONFIDENCE` without both a total line and a date. When both are found, the document is read anyway with every field marked **low**, so the user can check a prefilled form. `payment_screenshot` if it contains Venmo/Zelle/PayPal keywords plus a phrase like "You paid", "Paid to", "Sent to", "You sent". `not_an_expense` if readable but no amounts were found. Otherwise `receipt`. | — |
+| `document_type` | `unreadable` if `text_confidence < OCR_MIN_CONFIDENCE` or < 20 alphanumeric chars. Nothing is filled in from low-confidence text: a wrong value that looks right is worse than asking again, so the user is offered a clearer photo or manual entry. `payment_screenshot` if it contains Venmo/Zelle/PayPal keywords plus a phrase like "You paid", "Paid to", "Sent to", "You sent". `not_an_expense` if readable but no amounts were found. Otherwise `receipt`. | — |
 | `total` | Search lines **bottom-up** for, in priority order: `GRAND TOTAL`, `AMOUNT DUE`, `BALANCE DUE`, `BALANCE TO PAY`, `TOTAL`, `AMOUNT PAID`, `CHARGED`, `BALANCE`. Exclude lines containing `SUBTOTAL`, `SUB TOTAL`, `TOTAL SAVINGS`, `TOTAL ITEMS`, `TOTAL TAX`. Take the last amount on the matching line. | high if keyword-matched; otherwise a `CREDIT` / `DEBIT` line without `REFUND` / `RETURN` → **medium**; otherwise the largest amount in the document → **low** |
 | `subtotal` | Line containing `SUBTOTAL` / `SUB TOTAL` / `SUB-TOTAL` | high if found |
 | `tax` | Sum of amounts on lines containing `TAX` (not `TOTAL`, not `PRE-TAX`, not `TAXABLE`) | high if found |
@@ -266,8 +267,8 @@ class ExtractionBackend(Protocol):
 
 | Code | Check | Severity | Message (example) |
 |---|---|---|---|
-| V01 | `document_type` is `not_an_expense` | error | "This doesn't look like a receipt or payment. Try another file or enter it manually." |
-| V02 | `document_type` is `unreadable` | error | "Couldn't read this image clearly. Retake the photo or enter it manually." |
+| V01 | `document_type` is `not_an_expense` | error | "Couldn't find any amounts, so this may not be a receipt. Upload a clearer photo or enter it manually." |
+| V02 | `document_type` is `unreadable` | error | "Couldn't read this clearly enough to fill it in. Upload a clearer photo or enter it manually." |
 | V03 | `total` missing | error (blocks save) | "Total amount is required." |
 | V04 | `total` ≤ 0 | error (blocks save) | "Total must be greater than zero." |
 | V05 | `date` missing | warning | "No date found; defaulting to today." (prefill today) |
@@ -513,7 +514,7 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 
 ### Stretch (P2, only after M12)
 - **Viewing and searching the items on a bill**, which the owner wants next: see what was bought on a given day, and search across bills.
-- **AI vision backend** (`EXTRACTION_BACKEND=claude` or `ollama`) implementing the same `ExtractionBackend` interface and returning the same `Extraction` model. Then a small script that runs every file in `fixtures/demo_files/` through both backends and reports field accuracy and seconds per file, for the case-study write-up.
+- **AI vision backend for more accuracy**, which is future scope and not paid for now. Testing on real receipts showed OCR results on borderline phone photos vary with the Tesseract version. (`EXTRACTION_BACKEND=claude` or `ollama`) implementing the same `ExtractionBackend` interface and returning the same `Extraction` model. Then a small script that runs every file in `fixtures/demo_files/` through both backends and reports field accuracy and seconds per file, for the case-study write-up.
 - Item name normalization and the `repeat_item` insight.
 - Home-currency display.
 

@@ -139,25 +139,16 @@ def test_too_little_text_unreadable():
     assert parse_fixture("too_short").document_type == "unreadable"
 
 
-def test_low_confidence_without_total_line_or_date_is_unreadable():
-    text = "Some blurry words here\nNothing useful 12.00\n10/14/2026"
-    e = parse(text, text_confidence=30.0, min_confidence=50.0)
+def test_low_confidence_fills_in_nothing_even_with_total_and_date():
+    e = parse((FIXTURES / "grocery.txt").read_text(), text_confidence=49.9, min_confidence=50.0, merchant_keywords=KEYWORDS)
     assert e.document_type == "unreadable"
-    assert e.total is None
-    assert parse("Some blurry words here\nTOTAL 12.00 again", text_confidence=30.0).document_type == "unreadable"
+    assert (e.total, e.date, e.merchant, e.tax, e.line_items, e.field_confidence) == (None, None, None, None, [], {})
+    assert "below the minimum" in e.field_reason["document_type"]
 
 
-def test_low_confidence_with_total_and_date_is_rescued_as_low():
-    e = parse((FIXTURES / "grocery.txt").read_text(), text_confidence=30.0, min_confidence=50.0, merchant_keywords=KEYWORDS)
-    assert e.document_type == "receipt"
-    assert e.total == 11.53
-    assert {v for k, v in e.field_confidence.items() if k != "currency"} == {"low"}
-    assert "please check" in e.field_reason["total"]
-    assert "below 50" in e.field_reason["document_type"]
-
-
-def test_normal_confidence_is_not_marked_low():
-    assert parse_fixture("grocery").field_confidence["total"] == "high"
+def test_confidence_at_the_minimum_is_read():
+    e = parse((FIXTURES / "grocery.txt").read_text(), text_confidence=50.0, min_confidence=50.0)
+    assert (e.document_type, e.total) == ("receipt", 11.53)
 
 
 def test_card_charge_line_is_medium_total():
