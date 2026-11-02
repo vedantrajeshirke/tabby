@@ -56,6 +56,8 @@ The prototype is part of a hiring case study. It **must**:
 - Paid AI APIs in the MVP (an AI backend is a stretch goal, section 10)
 - Email inbox parsing, forecasting, ML training, notifications, native mobile app
 - Tax features
+- Refunds or any money coming back: this project tracks expenses only (listed as a future step)
+- Viewing or editing the items on a bill: each bill is saved as its total (listed as a future step). The parser still reads items, and they stay inside `extraction_json`, but the `line_items` table isn't written
 
 ---
 
@@ -189,6 +191,7 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
 - Text-layer extraction gets `source = "pdf_text"` and a text confidence of 100.
 
 **Images (`ocr.py`)**
+- If the words read confidently cover well under the whole image, run OCR again cropped to them, and keep whichever pass has the higher mean confidence. This removes the table or background around a photographed receipt.
 - Preprocess: apply EXIF orientation → convert to grayscale → if the width is under 1200 px, upscale to ~1600 px wide (LANCZOS) → autocontrast. If the mean brightness is below 100 (a dark-mode screenshot), invert the image.
 - Run `pytesseract.image_to_data(..., config="--psm 6", output_type=Output.DICT)`.
 - Rebuild lines by grouping words on `(block_num, par_num, line_num)`.
@@ -226,8 +229,8 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
 
 | Field | Rule | Confidence |
 |---|---|---|
-| `document_type` | `unreadable` if `text_confidence < OCR_MIN_CONFIDENCE` or < 20 alphanumeric chars. `payment_screenshot` if it contains Venmo/Zelle/PayPal keywords plus a phrase like "You paid", "Paid to", "Sent to", "You sent". `not_an_expense` if readable but no amounts were found. Otherwise `receipt`. | — |
-| `total` | Search lines **bottom-up** for, in priority order: `GRAND TOTAL`, `AMOUNT DUE`, `BALANCE DUE`, `TOTAL`, `AMOUNT PAID`, `CHARGED`. Exclude lines containing `SUBTOTAL`, `SUB TOTAL`, `TOTAL SAVINGS`, `TOTAL ITEMS`, `TOTAL TAX`. Take the last amount on the matching line. | high if keyword-matched; if nothing matches, fall back to the largest amount in the document → **low** |
+| `document_type` | `unreadable` if < 20 alphanumeric chars, or if `text_confidence < OCR_MIN_CONFIDENCE` without both a total line and a date. When both are found, the document is read anyway with every field marked **low**, so the user can check a prefilled form. `payment_screenshot` if it contains Venmo/Zelle/PayPal keywords plus a phrase like "You paid", "Paid to", "Sent to", "You sent". `not_an_expense` if readable but no amounts were found. Otherwise `receipt`. | — |
+| `total` | Search lines **bottom-up** for, in priority order: `GRAND TOTAL`, `AMOUNT DUE`, `BALANCE DUE`, `BALANCE TO PAY`, `TOTAL`, `AMOUNT PAID`, `CHARGED`, `BALANCE`. Exclude lines containing `SUBTOTAL`, `SUB TOTAL`, `TOTAL SAVINGS`, `TOTAL ITEMS`, `TOTAL TAX`. Take the last amount on the matching line. | high if keyword-matched; otherwise a `CREDIT` / `DEBIT` line without `REFUND` / `RETURN` → **medium**; otherwise the largest amount in the document → **low** |
 | `subtotal` | Line containing `SUBTOTAL` / `SUB TOTAL` / `SUB-TOTAL` | high if found |
 | `tax` | Sum of amounts on lines containing `TAX` (not `TOTAL`, not `PRE-TAX`, not `TAXABLE`) | high if found |
 | `tip` | Line containing `TIP` or `GRATUITY` | high if found |
@@ -263,7 +266,6 @@ class ExtractionBackend(Protocol):
 | V06 | `date` in the future | error (blocks save) | "Date is in the future." |
 | V07 | `date` > 365 days old | warning | "This expense is over a year old. Is the date right?" |
 | V08 | `subtotal + tax + tip` ≠ `total` (tolerance $0.05) when subtotal and total are present | warning | "Subtotal + tax + tip = $X but total is $Y. Please check the amounts." |
-| V09 | sum of line item prices ≠ `subtotal` (tolerance $0.05) when both are present | warning | "Line items add up to $X, but subtotal is $Y." |
 | V10 | `currency` is not USD | warning | "Currency is EUR. Amounts are stored as-is; conversion isn't supported yet." |
 | V11 | any `field_confidence` is `low` | warning | Highlight the field: "Please double-check the total." |
 | V12 | `merchant` missing | warning | "Merchant not found; please add one." |
@@ -303,7 +305,7 @@ Store `category_source` (`override | doc_type | rule | default | manual`) and sh
 ### 6.8 Confirm screen (P0)
 Two-column layout (stacks on mobile):
 - **Left:** file preview (image, or the rendered first page of a PDF).
-- **Right:** editable form with merchant, date, total, category (dropdown), payment method, note, plus a collapsible line items table (editable) and subtotal/tax/tip.
+- **Right:** editable form with merchant, date, total, category (dropdown), payment method, note, plus subtotal/tax/tip.
 - Validation issues are listed above the form; low-confidence fields are visually marked, and each field shows its `field_reason` as help text.
 - A collapsible **"Show extracted text"** section displays `raw_text` for transparency.
 - Buttons: **Save expense** (disabled while blocking errors exist) and **Discard**.
@@ -444,7 +446,7 @@ Enable `PRAGMA foreign_keys = ON`. Merchant normalization for matching: uppercas
   - no total keyword → largest-amount fallback with `low` confidence
 - `ocr.py`: preprocessing returns grayscale; inversion triggers for a dark image (no real OCR needed in this test).
 - `files.py`: a PDF with a text layer returns text; the empty-text case triggers the render path (can mock pdfplumber).
-- `validation.py`: each rule V01–V12 has at least one test, including tolerance edges for V08/V09.
+- `validation.py`: each rule V01–V12 (V09 removed) has at least one test, including tolerance edges for V08.
 - `categorize.py`: override beats doc type beats rule beats default; `UBER EATS` → Food Delivery, not Transport.
 - `duplicates.py`: exact hash match; likely match on the same total, date and merchant; no false positive for the same merchant on a different date.
 - `periods.py`: cycle start day 1 and 15; month boundaries; February.
@@ -457,7 +459,7 @@ Enable `PRAGMA foreign_keys = ON`. Merchant normalization for matching: uppercas
 4. **Difficult/invalid inputs:**
    - Blurry photo → low OCR confidence → V02 error, manual entry offered
    - Photo that isn't a receipt → V01 error
-   - Receipt where the amounts don't add up → V08/V09 warning, saving still allowed
+   - Receipt where the amounts don't add up → V08 warning, saving still allowed
    - The same file uploaded twice → duplicate warning
 
 ---
@@ -476,7 +478,7 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 | M6 | Dashboard + insights | `periods.py`, all P0 dashboard sections, 4 P0 insight generators with tests, empty states | 45 min |
 | M7 | Synthetic data + polish | Seed script and Settings buttons, synthetic labels/toggle, README with setup and demo scenarios | 15 min |
 
-If time is running out, cut in this order: monthly trend line → expense list editing → line item editing → line item parsing (leave `line_items` empty). **Never cut:** the confirm step, validation, field confidence/reasons, mock labeling, or invalid-input handling.
+If time is running out, cut in this order: monthly trend line → expense list editing. **Never cut:** the confirm step, validation, field confidence/reasons, mock labeling, or invalid-input handling.
 
 ### Stretch (P2, only after M7)
 - **AI vision backend** (`EXTRACTION_BACKEND=claude` or `ollama`) implementing the same `ExtractionBackend` interface and returning the same `Extraction` model. Then a small script that runs every file in `fixtures/demo_files/` through both backends and reports field accuracy and seconds per file, for the case-study write-up.
@@ -492,11 +494,12 @@ If time is running out, cut in this order: monthly trend line → expense list e
 - How extraction works (PDF text → OCR → parser) and mock mode
 - The demo scenarios from section 9
 - What's synthetic or mocked, and how to remove it
-- Known limitations and next steps: AI vision backend, bank CSV import, receipt line item insights, home-currency view, roommate splits
+- Known limitations and next steps: AI vision backend, bank CSV import, viewing and searching the items on a bill, refunds, receipt line item insights, home-currency view, roommate splits
 
 ---
 
 ## 12. Instructions for Claude Code
+- The case-study brief also requires these in the README: sample data, example inputs with expected outputs, time spent, how AI was used and checked, and what is implemented, mocked or deferred.
 - Read this whole spec before writing code. Follow the milestone order in section 10.
 - Ask before changing scope, adding dependencies, or deviating from the data model.
 - Keep functions small and pure in `core/` (especially `parser.py`); keep Streamlit pages thin (UI only, calling `core/`).
