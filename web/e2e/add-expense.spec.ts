@@ -57,8 +57,13 @@ test("a failed read fills nothing and offers a clearer photo or manual entry", a
   await page.getByRole("button", { name: "Enter manually" }).click();
   await expect(page.getByLabel(/^Total/)).toHaveValue("");
   await expect(page.getByLabel("Merchant")).toHaveValue("");
+  await expect(page.getByText("Total amount is required.")).toHaveCount(0);
+  await expect(page.getByText("Merchant not found")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Save expense" }).click();
   await expect(page.getByText("Total amount is required.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save expense" })).toBeDisabled();
+  await expect(page.getByLabel(/^Total/)).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Enter the details" })).toBeVisible();
 });
 
 test("manual entry blocks bad values until they're fixed, and remembers a category choice", async ({ page }) => {
@@ -69,16 +74,20 @@ test("manual entry blocks bad values until they're fixed, and remembers a catego
 
   await page.getByLabel(/^Total/).fill("abc");
   await expect(page.getByText("Enter a number, like 12.50.")).toBeVisible();
-  await expect(save).toBeDisabled();
+  await save.click();
+  await expect(page.getByRole("heading", { name: "Enter the details" })).toBeVisible();
 
   await page.getByLabel(/^Total/).fill("0");
   await expect(page.getByText("Total must be greater than zero.")).toBeVisible();
-  await expect(save).toBeDisabled();
+  await save.click();
+  await expect(page.getByRole("heading", { name: "Enter the details" })).toBeVisible();
 
   await page.getByLabel(/^Total/).fill("1,234.50");
   await page.getByLabel("Date").fill("2099-01-01");
   await expect(page.getByText("Date is in the future.")).toBeVisible();
-  await expect(save).toBeDisabled();
+  await save.click();
+  await expect(page.getByRole("heading", { name: "Enter the details" })).toBeVisible();
+  await expect(page.getByLabel("Date")).toBeFocused();
 
   await page.getByLabel("Date").fill("2026-10-01");
   await page.getByLabel("Merchant").fill(merchant);
@@ -93,6 +102,30 @@ test("manual entry blocks bad values until they're fixed, and remembers a catego
   await page.getByLabel("Merchant").fill(merchant);
   await expect(page.getByText("Category from: your past choice")).toBeVisible();
   await expect(page.getByLabel("Category")).toHaveValue("Education");
+});
+
+test("required fields are marked, and messages only appear once a field is left empty", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enter manually instead" }).click();
+  await expect(page.getByText("Required", { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Merchant not found" })).toHaveCount(0);
+
+  await page.getByLabel("Merchant").focus();
+  await page.getByLabel("Note").focus();
+  await expect(page.getByText("Merchant not found; please add one.")).toBeVisible();
+  await page.getByLabel("Merchant").fill("Made Up Cafe");
+  await expect(page.getByText("Merchant not found")).toHaveCount(0);
+
+  await page.getByLabel(/^Total/).focus();
+  await page.getByLabel("Note").focus();
+  await expect(page.getByText("Total amount is required.")).toBeVisible();
+  await page.getByLabel(/^Total/).fill("4.00");
+  await expect(page.getByText("Total amount is required.")).toHaveCount(0);
+
+  await page.getByLabel("Date").fill("");
+  await page.getByLabel("Note").focus();
+  await expect(page.getByText("Choose a date.")).toBeVisible();
 });
 
 test("an unsupported file gets a clear message and the page keeps working", async ({ page }) => {

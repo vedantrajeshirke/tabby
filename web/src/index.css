@@ -39,3 +39,21 @@ body {
   outline: 2px solid var(--color-forest);
   outline-offset: 2px;
 }
+
+/* Field messages appear next to the field they're about. */
+.pop-in {
+  animation: pop-in 140ms ease-out;
+}
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pop-in {
+    animation: none;
+  }
+}

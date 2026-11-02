@@ -82,7 +82,8 @@ test("an expense can be opened, edited, and the list updates", async ({ page }) 
 
   await page.getByLabel(/^Total/).fill("0");
   await expect(page.getByText("Total must be greater than zero.")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Save changes" })).toBeDisabled();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("heading", { name: "Edit expense" })).toBeVisible();
 
   await page.getByLabel(/^Total/).fill("31.50");
   await page.getByLabel("Note").fill("Corrected amount");

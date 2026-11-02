@@ -281,7 +281,7 @@ class ExtractionBackend(Protocol):
 | V11 | any `field_confidence` is `low` | warning | Highlight the field: "Please double-check the total." |
 | V12 | `merchant` missing | warning | "Merchant not found; please add one." |
 
-**Errors** marked "blocks save" disable the Save button until fixed. V01/V02 show the manual entry option prominently. **Warnings** are shown in yellow but don't block saving.
+**Errors** marked "blocks save" stop saving until fixed: pressing Save shows what's wrong and moves to that field, and the server refuses them too. Each message appears next to its field, and V03 and V12 only appear once the field has been left empty or Save was pressed. Required fields are marked with `*`. V01/V02 show the manual entry option prominently. **Warnings** are shown in yellow but don't block saving.
 
 ### 6.6 Duplicate detection (P0)
 - Duplicates are only ever checked against the same user's expenses.
@@ -320,7 +320,7 @@ Two-column layout (stacks on mobile):
 - **Right:** editable form with merchant, date, total, category (dropdown), payment method, note, plus subtotal/tax/tip.
 - Validation issues are listed above the form; low-confidence fields are visually marked, and each field shows its `field_reason` as help text.
 - A collapsible **"Show extracted text"** section displays `raw_text` for transparency.
-- Buttons: **Save expense** (disabled while blocking errors exist) and **Discard**.
+- Buttons: **Save expense** and **Discard**.
 - After saving, show a success message plus an "Add another" button that resets the page state.
 
 ### 6.9 Expenses list (P0)

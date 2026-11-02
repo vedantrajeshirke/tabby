@@ -36,24 +36,40 @@ function asText(value: number | null | undefined): string {
   return value == null ? "" : value.toFixed(2);
 }
 
-function Field({ label, htmlFor, status, help, error, children }: {
+function Bubble({ tone, children }: { tone: "error" | "warning"; children: string }) {
+  const colors = tone === "error" ? "bg-expense-soft text-expense" : "bg-caution-soft text-caution";
+  return (
+    <p role={tone === "error" ? "alert" : "status"} className={`pop-in relative mt-2 w-fit max-w-full rounded-lg px-2.5 py-1.5 text-sm ${colors}`}>
+      <span aria-hidden="true" className={`absolute -top-1 left-3 size-2 rotate-45 ${colors}`} />
+      <span className="relative">{children}</span>
+    </p>
+  );
+}
+
+function Field({ label, htmlFor, required, status, help, error, warning, children }: {
   label: string;
   htmlFor: string;
+  required?: boolean;
   status?: "read" | "check";
   help?: string;
   error?: string;
+  warning?: string;
   children: ReactNode;
 }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="flex items-center gap-2 text-sm font-medium text-pine">
-        {label}
+        <span>
+          {label}
+          {required && <span className="text-expense"> *</span>}
+        </span>
         {status === "read" && <span title="Read from your receipt" aria-hidden="true" className="size-1.5 rounded-full bg-sage" />}
         {status === "check" && <span className="rounded-full bg-caution-soft px-2 py-0.5 text-xs font-medium text-caution">Please check</span>}
       </label>
       {children}
-      {error && <p className="mt-1 text-sm text-expense">{error}</p>}
-      {help && !error && <p className="mt-1 text-xs text-muted">{help}</p>}
+      {error && <Bubble tone="error">{error}</Bubble>}
+      {warning && !error && <Bubble tone="warning">{warning}</Bubble>}
+      {help && !error && !warning && <p className="mt-1 text-xs text-muted">{help}</p>}
     </div>
   );
 }
@@ -118,6 +134,8 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
   const [report, setReport] = useState<Report | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [left, setLeft] = useState<Set<string>>(new Set()); // fields the user has been in and left
+  const [triedSaving, setTriedSaving] = useState(false);
 
   const amounts = useMemo(
     () => Object.fromEntries(AMOUNT_FIELDS.map((f) => [f, parseAmount(values[f])])) as Record<AmountField, number | null>,
@@ -144,7 +162,10 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
 
   const [checking, setChecking] = useState(false);
   useEffect(() => {
-    if (!canCheck) return;
+    if (!canCheck) {
+      setChecking(false);
+      return;
+    }
     const controller = new AbortController();
     setChecking(true);
     const timer = setTimeout(() => {
@@ -170,6 +191,38 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
     setValues((current) => ({ ...current, [key]: value }));
   }
 
+  function leave(key: string) {
+    setLeft((current) => new Set(current).add(key));
+  }
+
+  /** "Missing" messages wait until a field has been left empty or Save was pressed. Others show straight away. */
+  function issuesFor(key: string) {
+    const canShowMissing = triedSaving || left.has(key);
+    const shown = (report?.issues ?? []).filter((issue) => {
+      if (issue.field !== key || issue.code === "V11") return false; // V11 is the "Please check" tag
+      if (issue.code === "V03") return canShowMissing && !values.total.trim();
+      if (issue.code === "V12") return canShowMissing && !values.merchant.trim();
+      return true;
+    });
+    return {
+      error: shown.find((issue) => issue.severity === "error")?.message,
+      warning: shown.find((issue) => issue.severity === "warning")?.message,
+    };
+  }
+
+  function firstProblemField() {
+    const notNumber = AMOUNT_FIELDS.find((f) => Number.isNaN(amounts[f]));
+    if (notNumber) return notNumber;
+    if (!values.date) return "date";
+    return report?.issues.find((issue) => issue.severity === "error" && issue.field)?.field ?? null;
+  }
+
+  function trySaving() {
+    setTriedSaving(true);
+    if (canSave) save();
+    else document.getElementById(firstProblemField() ?? "total")?.focus();
+  }
+
   async function save() {
     setSaving(true);
     setError("");
@@ -189,35 +242,39 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
     const confidence = prefill.field_confidence[key];
     return {
       status: confidence === "low" ? ("check" as const) : confidence ? ("read" as const) : undefined,
-      help: prefill.field_reason[key],
+      help: values[key] ? prefill.field_reason[key] : undefined, // nothing to explain about an empty field
     };
   }
 
   function amountInput(key: AmountField, label: string, big = false) {
     const invalid = Number.isNaN(amounts[key]);
     const state = fieldState(key);
-    const serverError = report?.issues.some((i) => i.field === key && i.severity === "error");
+    const { error: issue, warning } = issuesFor(key);
+    const problem = invalid ? TEXT_ERROR : issue;
+    const required = key === "total";
     return (
-      <Field label={label} htmlFor={key} {...state} error={invalid ? TEXT_ERROR : undefined}>
+      <Field label={label} htmlFor={key} required={required} {...state} error={problem} warning={warning}>
         <input
           id={key}
           inputMode="decimal"
           autoComplete="off"
           value={values[key]}
-          aria-invalid={invalid || serverError}
+          aria-required={required}
+          aria-invalid={Boolean(problem)}
           onChange={(e) => set(key, e.target.value)}
+          onBlur={() => leave(key)}
           className={`${inputBase} amount ${big ? "text-2xl font-semibold" : ""} ${
-            invalid || serverError ? "border-expense" : state.status === "check" ? "border-caution" : "border-line"
+            problem ? "border-expense" : warning || state.status === "check" ? "border-caution" : "border-line"
           }`}
         />
       </Field>
     );
   }
 
-  const issues = report?.issues ?? [];
-  const blockers = issues.filter((i) => i.severity === "error" && !["V01", "V02"].includes(i.code));
-  const warnings = issues.filter((i) => i.severity === "warning");
-  const canSave = canCheck && !saving && !checking && report !== null && !report.blocks_save;
+  const merchantIssues = issuesFor("merchant");
+  const dateIssues = issuesFor("date");
+  const dateMissing = !values.date && (triedSaving || left.has("date"));
+  const canSave = canCheck && report !== null && !report.blocks_save;
   const shownCategory = category ?? report?.category ?? existing?.category ?? "";
   const rawText = existing?.extraction?.raw_text ?? extraction?.raw_text;
   const heading = existing ? "Edit expense" : prefill ? "Check the details" : "Enter the details";
@@ -228,54 +285,60 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
     <section>
       <h1 className="text-3xl font-semibold tracking-tight text-pine">{heading}</h1>
       <p className="mt-2 text-muted">{intro}</p>
+      <p className="mt-1 text-xs text-muted"><span className="text-expense">*</span> Required</p>
 
       <div className={`mt-6 grid gap-6 ${hasPreview ? "md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]" : "max-w-xl"}`}>
         {hasPreview && <div><Preview file={file} url={previewUrl} /></div>}
 
         <form
+          noValidate
           className="min-w-0 space-y-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (canSave) save();
+            trySaving();
           }}
         >
-          <div aria-live="polite" className="space-y-2">
-            {blockers.map((issue) => (
-              <p key={issue.code} className="rounded-xl bg-expense-soft p-3 text-sm text-expense">{issue.message}</p>
-            ))}
+          <div aria-live="polite" className="space-y-2 empty:hidden">
             {report?.duplicates.map((duplicate) => (
               <div key={duplicate.expense_id} className="rounded-xl bg-caution-soft p-3 text-sm text-caution">
                 <p>{duplicate.message}</p>
                 <p className="mt-1 font-medium">{duplicate.summary}</p>
               </div>
             ))}
-            {warnings.map((issue) => (
-              <p key={issue.code} className="rounded-xl bg-caution-soft p-3 text-sm text-caution">{issue.message}</p>
-            ))}
           </div>
 
           {amountInput("total", "Total ($)", true)}
 
-          <Field label="Merchant" htmlFor="merchant" {...fieldState("merchant")}>
+          <Field label="Merchant" htmlFor="merchant" {...fieldState("merchant")} warning={merchantIssues.warning}>
             <input
               id="merchant"
               maxLength={200}
               autoComplete="off"
               value={values.merchant}
               onChange={(e) => set("merchant", e.target.value)}
-              className={`${inputBase} ${fieldState("merchant").status === "check" ? "border-caution" : "border-line"}`}
+              onBlur={() => leave("merchant")}
+              className={`${inputBase} ${merchantIssues.warning || fieldState("merchant").status === "check" ? "border-caution" : "border-line"}`}
             />
           </Field>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Date" htmlFor="date" {...fieldState("date")} error={values.date ? undefined : "Choose a date."}>
+            <Field
+              label="Date"
+              htmlFor="date"
+              required
+              {...fieldState("date")}
+              error={dateMissing ? "Choose a date." : dateIssues.error}
+              warning={dateIssues.warning}
+            >
               <input
                 id="date"
                 type="date"
-                required
+                aria-required
+                aria-invalid={Boolean(dateMissing || dateIssues.error)}
                 value={values.date}
                 onChange={(e) => set("date", e.target.value)}
-                className={`${inputBase} ${fieldState("date").status === "check" ? "border-caution" : "border-line"}`}
+                onBlur={() => leave("date")}
+                className={`${inputBase} ${dateMissing || dateIssues.error ? "border-expense" : dateIssues.warning || fieldState("date").status === "check" ? "border-caution" : "border-line"}`}
               />
             </Field>
             <Field label="Category" htmlFor="category" help={report ? `Category from: ${report.category_label}` : undefined}>
@@ -346,7 +409,7 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
-              disabled={!canSave}
+              disabled={saving || checking}
               className="flex-1 rounded-xl bg-forest px-4 py-3 font-medium text-white transition-colors hover:bg-pine disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving…" : existing ? "Save changes" : "Save expense"}
