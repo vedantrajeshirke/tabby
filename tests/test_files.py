@@ -1,3 +1,4 @@
+import io
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -77,21 +78,36 @@ def test_short_text_triggers_render_path():
     assert not content.has_text_layer
 
 
-def test_save_original_uses_hash_and_keeps_bytes(tmp_path):
-    path = files.save_original(b"abc", "Photo.HEIC", tmp_path / "files")
-    assert path.name == f"{files.file_hash(b'abc')}.heic"
-    assert path.read_bytes() == b"abc"
+def _photo_with_gps():
+    exif = Image.Exif()
+    gps = exif.get_ifd(0x8825)
+    gps[1], gps[2] = "N", (34.0, 1.0, 2.0)
+    exif[0x010F] = "Test Camera"
+    exif[0x0112] = 6
+    return image_bytes(Image.new("RGB", (400, 200), "white"), "JPEG", exif=exif)
 
 
-def test_preview_of_image_is_browser_sized():
-    data = image_bytes(Image.new("RGB", (4000, 6000), "white"))
-    assert max(files.preview_image(data, "a.png").size) <= 1600
+def test_prepare_strips_gps_and_all_metadata_but_keeps_rotation():
+    original = _photo_with_gps()
+    assert Image.open(io.BytesIO(original)).getexif().get_ifd(0x8825)
+    data, ext = files.prepare_for_storage(original, "photo.jpg")
+    stored = Image.open(io.BytesIO(data))
+    assert ext == "jpg"
+    assert dict(stored.getexif()) == {}
+    assert b"Test Camera" not in data
+    assert stored.size == (200, 400)
 
 
-def test_preview_of_pdf_first_page():
-    assert files.preview_image(text_pdf(["hello there"]), "a.pdf") is not None
+def test_prepare_shrinks_large_photos_and_converts_heic():
+    data, ext = files.prepare_for_storage(image_bytes(Image.new("RGB", (4000, 6000), "white"), "HEIF"), "a.HEIC")
+    assert ext == "jpg"
+    assert max(Image.open(io.BytesIO(data)).size) == 2000
 
 
-def test_preview_of_corrupt_file_is_none():
-    assert files.preview_image(b"junk", "a.png") is None
-    assert files.preview_image(b"junk", "a.pdf") is None
+def test_prepare_flattens_transparent_png():
+    assert files.prepare_for_storage(image_bytes(Image.new("RGBA", (10, 10))), "a.png")[1] == "jpg"
+
+
+def test_prepare_keeps_pdf_and_refuses_corrupt_image():
+    assert files.prepare_for_storage(b"%PDF", "a.pdf") == (b"%PDF", "pdf")
+    assert files.prepare_for_storage(b"junk", "a.png") is None

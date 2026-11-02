@@ -112,3 +112,52 @@ def insert_expense(conn: psycopg.Connection, user_id: str, expense: Expense) -> 
         f"INSERT INTO expenses ({columns}) VALUES ({placeholders}) RETURNING id", tuple(values.values())
     ).fetchone()
     return row["id"]
+
+
+def get_expense(conn: psycopg.Connection, user_id: str, expense_id: int) -> dict | None:
+    query = f"SELECT {EXPENSE_COLUMNS}, extraction_json FROM expenses WHERE user_id = %s AND id = %s"
+    return conn.execute(query, (user_id, expense_id)).fetchone()
+
+
+def list_expenses(
+    conn: psycopg.Connection,
+    user_id: str,
+    start: str | None = None,
+    end: str | None = None,
+    category: str | None = None,
+    limit: int = 500,
+) -> list[dict]:
+    query = f"SELECT {EXPENSE_COLUMNS} FROM expenses WHERE user_id = %s"
+    params: list = [user_id]
+    if start:
+        query += " AND date >= %s::date"
+        params.append(start)
+    if end:
+        query += " AND date <= %s::date"
+        params.append(end)
+    if category:
+        query += " AND category = %s"
+        params.append(category)
+    query += " ORDER BY date DESC, id DESC LIMIT %s"
+    return conn.execute(query, (*params, limit)).fetchall()
+
+
+def update_expense(conn: psycopg.Connection, user_id: str, expense_id: int, values: dict) -> None:
+    """`values` comes from code, never from a request, so its keys are safe as column names."""
+    assignments = ", ".join(f"{column} = %s" for column in values)
+    conn.execute(
+        f"UPDATE expenses SET {assignments} WHERE user_id = %s AND id = %s", (*values.values(), user_id, expense_id)
+    )
+
+
+def delete_expense(conn: psycopg.Connection, user_id: str, expense_id: int) -> dict | None:
+    return conn.execute(
+        "DELETE FROM expenses WHERE user_id = %s AND id = %s RETURNING file_path", (user_id, expense_id)
+    ).fetchone()
+
+
+def count_file_uses(conn: psycopg.Connection, user_id: str, file_path: str) -> int:
+    row = conn.execute(
+        "SELECT count(*) AS n FROM expenses WHERE user_id = %s AND file_path = %s", (user_id, file_path)
+    ).fetchone()
+    return row["n"]

@@ -16,8 +16,8 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_PDF_PAGES = 3
 MIN_TEXT_LAYER_CHARS = 20
 PDF_RENDER_DPI = 300
-PREVIEW_MAX_SIZE = (1200, 1600)
-PDF_PREVIEW_DPI = 100
+STORED_MAX_SIZE = (2000, 2000)
+STORED_JPEG_QUALITY = 80
 
 
 class FileRejected(ValueError):
@@ -32,6 +32,9 @@ class PdfContent:
     @property
     def has_text_layer(self) -> bool:
         return not self.page_images
+
+
+CONTENT_TYPES = {"jpg": "image/jpeg", "pdf": "application/pdf"}
 
 
 def extension(filename: str) -> str:
@@ -73,22 +76,19 @@ def load_pdf(file_bytes: bytes) -> PdfContent:
         return PdfContent(text="", page_images=[page.to_image(resolution=PDF_RENDER_DPI).original for page in pages])
 
 
-def preview_image(file_bytes: bytes, filename: str) -> Image.Image | None:
-    """A browser-sized preview: the image, or the first page of a PDF. None if it can't be rendered."""
+def prepare_for_storage(file_bytes: bytes, filename: str) -> tuple[bytes, str] | None:
+    """Return (data, extension). Images are re-encoded, which drops GPS and all other metadata.
+
+    PDFs are kept as uploaded. Returns None for an image that can't be decoded, which isn't stored.
+    """
+    if extension(filename) == "pdf":
+        return file_bytes, "pdf"
     try:
-        if extension(filename) == "pdf":
-            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                return pdf.pages[0].to_image(resolution=PDF_PREVIEW_DPI).original.copy()
-        image = load_image(file_bytes).convert("RGB")
-        image.thumbnail(PREVIEW_MAX_SIZE)
-        return image
+        image = ImageOps.exif_transpose(Image.open(io.BytesIO(file_bytes)))
+        image = image.convert("RGB")
     except Exception:
         return None
-
-
-def save_original(file_bytes: bytes, filename: str, directory: Path) -> Path:
-    """Store the original upload as <hash>.<ext>. Called only after the user confirms."""
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"{file_hash(file_bytes)}.{extension(filename)}"
-    path.write_bytes(file_bytes)
-    return path
+    image.thumbnail(STORED_MAX_SIZE)
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=STORED_JPEG_QUALITY, optimize=True)
+    return buffer.getvalue(), "jpg"

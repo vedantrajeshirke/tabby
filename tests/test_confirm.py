@@ -79,3 +79,13 @@ def test_build_expense_without_merchant_or_extraction():
     assert expense.merchant == confirm.UNKNOWN_MERCHANT
     assert expense.document_type == "manual"
     assert expense.extraction_json is None
+
+
+def test_stored_extraction_is_redacted():
+    original = read(raw_text="SAFEWAY\nVISA ****1234\nUser ID: 1234", field_reason={"total": "found on line 'CARD *1234 10.00'"})
+    values = form()
+    stored = json.loads(confirm.build_expense(original, confirm.apply_edits(original, values), values, "Other", "rule").extraction_json)
+    assert "1234" not in stored["raw_text"]
+    assert "1234" not in stored["field_reason"]["total"]
+    assert "SAFEWAY" in stored["raw_text"]
+    assert "****1234" in original.raw_text  # the in-memory copy is left alone

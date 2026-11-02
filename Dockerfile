@@ -14,4 +14,4 @@ COPY fixtures/mock_extractions ./fixtures/mock_extractions
 RUN useradd --create-home app && mkdir -p data && chown app data
 USER app
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]

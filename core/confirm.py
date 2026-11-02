@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from datetime import date
 
 from core.models import Expense, Extraction, ValidationIssue
+from core.redact import redact_value
 from core.validation import validate
 
 UNKNOWN_MERCHANT = "Unknown merchant"
@@ -63,7 +64,7 @@ def build_expense(
     file_path: str | None = None,
     file_hash: str | None = None,
 ) -> Expense:
-    """`original` is stored as read, so what the app extracted stays traceable after edits."""
+    """`original` is stored as read, minus sensitive details, so the extraction stays traceable after edits."""
     has_extraction = original.document_type != "manual" or original.raw_text
     return Expense(
         merchant=edited.merchant or UNKNOWN_MERCHANT,
@@ -80,5 +81,5 @@ def build_expense(
         note=form.note.strip() or None,
         file_path=file_path,
         file_hash=file_hash,
-        extraction_json=json.dumps(original.to_dict()) if has_extraction else None,
+        extraction_json=json.dumps(redact_value(original.to_dict())) if has_extraction else None,
     )
