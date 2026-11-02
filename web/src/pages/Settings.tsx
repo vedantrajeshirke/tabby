@@ -21,7 +21,13 @@ function message(e: unknown, fallback: string) {
   return e instanceof ApiError ? e.message : fallback;
 }
 
-export default function SettingsPage({ signedIn, firstName, lastName }: { signedIn: boolean; firstName: string; lastName: string }) {
+export default function SettingsPage({ signedIn, firstName, lastName, email, hasPassword }: {
+  signedIn: boolean;
+  firstName: string;
+  lastName: string;
+  email?: string;
+  hasPassword: boolean;
+}) {
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -45,7 +51,7 @@ export default function SettingsPage({ signedIn, firstName, lastName }: { signed
         <>
           <ProfileAndBudget initial={settings} signedIn={signedIn} firstName={firstName} lastName={lastName} onSaved={setSettings} />
           <DemoData />
-          <DeleteEverything signedIn={signedIn} />
+          <DeleteEverything signedIn={signedIn} email={email} hasPassword={hasPassword} />
         </>
       )}
     </div>
@@ -186,17 +192,29 @@ function DemoData() {
   );
 }
 
-function DeleteEverything({ signedIn }: { signedIn: boolean }) {
+function DeleteEverything({ signedIn, email, hasPassword }: { signedIn: boolean; email?: string; hasPassword: boolean }) {
+  const usePassword = signedIn && hasPassword && Boolean(email); // local mode and Google accounts have no password
   const [typed, setTyped] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
+  const confirmed = usePassword ? typed.length > 0 : typed === CONFIRM_WORD;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (typed !== CONFIRM_WORD) return;
+    if (!confirmed) return;
     setDeleting(true);
     setError("");
     try {
+      if (usePassword) {
+        // Checked with Supabase directly, so the password never reaches our API.
+        const check = await supabase?.auth.signInWithPassword({ email: email!, password: typed });
+        if (check?.error) {
+          setTyped("");
+          setError(check.error.status === 400 ? "That password isn't right. Nothing was deleted." : "Couldn't check your password, so nothing was deleted. Please try again.");
+          setDeleting(false);
+          return;
+        }
+      }
       await deleteAccount();
       if (signedIn) await supabase?.auth.signOut({ scope: "local" });
       window.location.assign("/");
@@ -215,13 +233,19 @@ function DeleteEverything({ signedIn }: { signedIn: boolean }) {
     >
       <form onSubmit={submit}>
         <label className="block text-sm font-medium text-pine">
-          Type {CONFIRM_WORD} to confirm
-          <input autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} className={inputClass} />
+          {usePassword ? "Enter your password to confirm" : `Type ${CONFIRM_WORD} to confirm`}
+          <input
+            type={usePassword ? "password" : "text"}
+            autoComplete={usePassword ? "current-password" : "off"}
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            className={inputClass}
+          />
         </label>
         {error && <p role="alert" className="mt-3 rounded-xl bg-expense-soft p-3 text-sm text-expense">{error}</p>}
         <button
           type="submit"
-          disabled={typed !== CONFIRM_WORD || deleting}
+          disabled={!confirmed || deleting}
           className="mt-3 rounded-xl bg-expense px-5 py-2.5 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
         >
           {deleting ? "Deleting…" : "Delete permanently"}

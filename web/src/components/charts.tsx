@@ -183,7 +183,7 @@ export function SpendingTrend({ points }: { points: Dashboard["trend"]["points"]
         <summary className="cursor-pointer font-medium text-forest">View as table</summary>
         <table className="mt-2 w-full">
           <tbody>
-            {points.map((point) => (
+            {[...points].reverse().map((point) => (
               <tr key={point.full_label} className="border-t border-line">
                 <th scope="row" className="py-1.5 text-left font-normal text-muted">{point.full_label}{point.in_progress ? " (so far)" : ""}</th>
                 <td className="amount py-1.5 text-right font-medium">{formatMoney(point.total)}</td>

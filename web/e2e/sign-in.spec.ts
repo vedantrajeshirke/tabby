@@ -24,7 +24,7 @@ async function fakeBackends(page: Page, seenTokens: (string | undefined)[]) {
             token_type: "bearer",
             expires_in: 3600,
             expires_at: Math.floor(Date.now() / 1000) + 3600,
-            user: { id: USER_ID, aud: "authenticated", email: EMAIL, app_metadata: {}, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" },
+            user: { id: USER_ID, aud: "authenticated", email: EMAIL, app_metadata: { provider: "email", providers: ["email"] }, user_metadata: {}, created_at: "2026-01-01T00:00:00Z" },
           },
         })
       : route.fulfill({ status: 400, json: { error_code: "invalid_credentials", msg: "Invalid login credentials" } }),
@@ -113,6 +113,39 @@ test("an account without a name is asked once, then shows the name instead of th
   await expect(page.getByText("Sam Example").filter({ visible: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "What should we call you?" })).toHaveCount(0);
   await expect(page.getByText(EMAIL)).toHaveCount(0);
+});
+
+test("deleting an account needs the right password, which never goes to our API", async ({ page }) => {
+  await fakeBackends(page, []);
+  const apiBodies: string[] = [];
+  let deleted = false;
+  await page.route("**/api/settings", (route) =>
+    route.fulfill({ json: { name: "", monthly_budget: null, cycle_start_day: 1 } }),
+  );
+  await page.route("**/api/account", (route) => {
+    apiBodies.push(route.request().postData() ?? "");
+    deleted = true;
+    return route.fulfill({ status: 204 });
+  });
+  await page.goto(APP);
+  await signIn(page, "right-password");
+  await page.getByRole("link", { name: "Settings" }).filter({ visible: true }).click();
+
+  const remove = page.getByRole("button", { name: "Delete permanently" });
+  await expect(page.getByLabel("Type DELETE to confirm")).toHaveCount(0);
+  await expect(remove).toBeDisabled();
+
+  await page.getByLabel("Enter your password to confirm").fill("wrong-password");
+  await remove.click();
+  await expect(page.getByRole("alert")).toContainText("That password isn't right");
+  expect(deleted).toBe(false);
+  await expect(page.getByLabel("Enter your password to confirm")).toHaveValue("");
+
+  await page.getByLabel("Enter your password to confirm").fill("right-password");
+  await remove.click();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+  expect(deleted).toBe(true);
+  expect(apiBodies).toEqual([JSON.stringify({ confirm: "DELETE" })]);
 });
 
 test("create-account and reset screens are reachable", async ({ page }) => {

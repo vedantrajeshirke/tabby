@@ -111,17 +111,19 @@ export default function App() {
       firstName={first ?? ""}
       lastName={last ?? ""}
       email={session.user.email}
+      hasPassword={(session.user.app_metadata.providers ?? [session.user.app_metadata.provider]).includes("email")}
       onSignOut={() => void supabase?.auth.signOut()}
     />
   );
 }
 
-function Shell({ status, name, firstName = "", lastName = "", email, onSignOut }: {
+function Shell({ status, name, firstName = "", lastName = "", email, hasPassword = false, onSignOut }: {
   status: Status;
   name?: string;
   firstName?: string;
   lastName?: string;
   email?: string;
+  hasPassword?: boolean;
   onSignOut?: () => void;
 }) {
   const { pathname } = useLocation();
@@ -201,7 +203,7 @@ function Shell({ status, name, firstName = "", lastName = "", email, onSignOut }
             <Route path="/dashboard" element={<Dashboard />} />
             <Route
               path="/settings"
-              element={<SettingsPage signedIn={Boolean(onSignOut)} firstName={firstName} lastName={lastName} />}
+              element={<SettingsPage signedIn={Boolean(onSignOut)} firstName={firstName} lastName={lastName} email={email} hasPassword={hasPassword} />}
             />
           </Routes>
         </main>

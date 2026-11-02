@@ -88,7 +88,7 @@ test("over budget, insights, comparison and labels all show", async ({ page }) =
   await expect(page.getByRole("status").filter({ hasText: "October 2026" })).toContainText("$550.00");
 
   await page.getByText("View as table").click();
-  await expect(page.getByRole("rowheader", { name: "October 2026" })).toBeVisible();
+  await expect(page.getByRole("rowheader", { name: /2026/ })).toHaveText(["November 2026 (so far)", "October 2026", "September 2026"]); // newest first
 });
 
 test("without a budget it points to Settings", async ({ page }) => {
