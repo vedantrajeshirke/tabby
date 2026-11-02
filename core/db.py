@@ -22,7 +22,6 @@ CREATE TABLE IF NOT EXISTS expenses (
   payment_method TEXT,
   document_type TEXT,
   note TEXT,
-  file_path TEXT,
   file_hash TEXT,
   extraction_json JSONB,
   is_synthetic BOOLEAN NOT NULL DEFAULT FALSE,
@@ -44,13 +43,14 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses(user_id, date);
 CREATE INDEX IF NOT EXISTS idx_expenses_user_hash ON expenses(user_id, file_hash);
+ALTER TABLE expenses DROP COLUMN IF EXISTS file_path;
 """
 
 # Dates and amounts come back as plain strings and floats, the types the rest of core uses.
 EXPENSE_COLUMNS = """
   id, user_id::text AS user_id, merchant, date::text AS date, total::float8 AS total, currency,
   subtotal::float8 AS subtotal, tax::float8 AS tax, tip::float8 AS tip, category, category_source,
-  payment_method, document_type, note, file_path, file_hash, is_synthetic, created_at::text AS created_at
+  payment_method, document_type, note, file_hash, is_synthetic, created_at::text AS created_at
 """
 
 
@@ -150,14 +150,6 @@ def update_expense(conn: psycopg.Connection, user_id: str, expense_id: int, valu
     )
 
 
-def delete_expense(conn: psycopg.Connection, user_id: str, expense_id: int) -> dict | None:
-    return conn.execute(
-        "DELETE FROM expenses WHERE user_id = %s AND id = %s RETURNING file_path", (user_id, expense_id)
-    ).fetchone()
-
-
-def count_file_uses(conn: psycopg.Connection, user_id: str, file_path: str) -> int:
-    row = conn.execute(
-        "SELECT count(*) AS n FROM expenses WHERE user_id = %s AND file_path = %s", (user_id, file_path)
-    ).fetchone()
-    return row["n"]
+def delete_expense(conn: psycopg.Connection, user_id: str, expense_id: int) -> bool:
+    cursor = conn.execute("DELETE FROM expenses WHERE user_id = %s AND id = %s", (user_id, expense_id))
+    return cursor.rowcount > 0

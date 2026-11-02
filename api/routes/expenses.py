@@ -1,12 +1,10 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
-from pydantic import ValidationError
+from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.deps import current_user, get_conn, get_storage
-from api.routes.extractions import read_upload
-from api.schemas import ExpenseEdit, ExpenseForm, invalid_fields_message
-from core import categorize, confirm, db, expenses, files
+from api.deps import current_user, get_conn
+from api.schemas import ExpenseEdit, ExpenseForm
+from core import categorize, confirm, db, expenses
 from core.redact import redact_value
 
 router = APIRouter()
@@ -14,11 +12,10 @@ NOT_FOUND = "This expense doesn't exist. It may have been deleted; refresh the l
 
 
 def public_expense(row: dict) -> dict:
-    """What the browser sees: no owner ID or storage path."""
-    hidden = {"user_id", "file_path", "extraction_json"}
+    """What the browser sees: no owner ID or file hash."""
+    hidden = {"user_id", "file_hash", "extraction_json"}
     return {
         **{k: v for k, v in row.items() if k not in hidden},
-        "has_file": bool(row["file_path"]),
         "category_label": categorize.SOURCE_LABELS.get(row["category_source"], ""),
     }
 
@@ -31,31 +28,19 @@ def blocked_response(checked: expenses.Review) -> HTTPException:
 
 
 @router.post("/expenses", status_code=201)
-async def create_expense(
-    data: str = Form(max_length=200_000),
-    file: UploadFile | None = File(default=None),
-    user_id: str = Depends(current_user),
-    conn=Depends(get_conn),
-    store=Depends(get_storage),
-) -> dict:
-    try:
-        body = ExpenseForm.model_validate_json(data)
-    except ValidationError as e:
-        raise HTTPException(status_code=422, detail=invalid_fields_message(e.errors())[0])
-    upload = await read_upload(file) if file else None
+def create_expense(body: ExpenseForm, user_id: str = Depends(current_user), conn=Depends(get_conn)) -> dict:
     original = body.extraction.to_extraction() if body.extraction else None
     form = confirm.FormValues(
         body.merchant, body.date, body.total, body.subtotal, body.tax, body.tip, body.payment_method, body.note
     )
-    file_hash = files.file_hash(upload[0]) if upload else None
     today = expenses.resolve_today(body.client_today)
     try:
-        checked = expenses.review(conn, user_id, original, form, today, body.category, file_hash)
+        checked = expenses.review(conn, user_id, original, form, today, body.category, body.file_hash)
     except expenses.InvalidCategory as e:
         raise HTTPException(status_code=422, detail=str(e))
     if checked.blocked:  # the browser disables Save too, but the server decides
         raise blocked_response(checked)
-    expense_id = expenses.save(conn, store, user_id, checked, upload, body.always_use_category)
+    expense_id = expenses.save(conn, user_id, checked, body.file_hash, body.always_use_category)
     return {"expense": public_expense(db.get_expense(conn, user_id, expense_id)), **expenses.report_review(checked)}
 
 
@@ -120,24 +105,6 @@ def edit_expense(expense_id: int, body: ExpenseEdit, user_id: str = Depends(curr
 
 
 @router.delete("/expenses/{expense_id}", status_code=204)
-def delete_expense(expense_id: int, user_id: str = Depends(current_user), conn=Depends(get_conn), store=Depends(get_storage)) -> None:
-    if not expenses.delete(conn, store, user_id, expense_id):
+def delete_expense(expense_id: int, user_id: str = Depends(current_user), conn=Depends(get_conn)) -> None:
+    if not db.delete_expense(conn, user_id, expense_id):
         raise HTTPException(status_code=404, detail=NOT_FOUND)
-
-
-@router.get("/expenses/{expense_id}/file")
-def get_file(expense_id: int, user_id: str = Depends(current_user), conn=Depends(get_conn), store=Depends(get_storage)) -> Response:
-    row = _owned(conn, user_id, expense_id)
-    data = store.read(row["file_path"]) if row["file_path"] else None
-    if data is None:
-        raise HTTPException(status_code=404, detail="No receipt file is stored for this expense.")
-    extension = files.extension(row["file_path"])
-    return Response(
-        content=data,
-        media_type=files.CONTENT_TYPES.get(extension, "application/octet-stream"),
-        headers={
-            "Content-Disposition": "inline",
-            "X-Content-Type-Options": "nosniff",
-            "Content-Security-Policy": "default-src 'none'; sandbox",
-        },
-    )

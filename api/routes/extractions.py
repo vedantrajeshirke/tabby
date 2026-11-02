@@ -28,7 +28,7 @@ async def create_extraction(
     user_id: str = Depends(current_user),
     conn=Depends(get_conn),
 ) -> dict:
-    """Read a file and report on it. Nothing is stored; the browser sends the file again on save."""
+    """Read a file and report on it. The file is discarded; only its hash goes back to the browser."""
     data, filename = await read_upload(file)
     extraction = get_backend().extract(data, filename)
     file_hash = files.file_hash(data)
@@ -42,7 +42,7 @@ async def create_extraction(
 
 
 @router.post("/validate")
-def validate_form(body: ExpenseForm, file_hash: str | None = None, user_id: str = Depends(current_user), conn=Depends(get_conn)) -> dict:
+def validate_form(body: ExpenseForm, user_id: str = Depends(current_user), conn=Depends(get_conn)) -> dict:
     """Re-check edited form values. Saves nothing."""
     original = body.extraction.to_extraction() if body.extraction else None
     form = confirm.FormValues(
@@ -50,7 +50,7 @@ def validate_form(body: ExpenseForm, file_hash: str | None = None, user_id: str 
     )
     try:
         checked = expenses.review(
-            conn, user_id, original, form, expenses.resolve_today(body.client_today), body.category, file_hash
+            conn, user_id, original, form, expenses.resolve_today(body.client_today), body.category, body.file_hash
         )
     except expenses.InvalidCategory as e:
         raise HTTPException(status_code=422, detail=str(e))

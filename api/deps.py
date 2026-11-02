@@ -1,9 +1,9 @@
-"""Request dependencies: the current user, a database connection, file storage."""
+"""Request dependencies: the current user and a database connection."""
 from collections.abc import Iterator
 
 from fastapi import HTTPException
 
-from core import db, storage
+from core import db
 from core.config import LOCAL_USER_ID, load_config
 
 
@@ -18,7 +18,3 @@ def current_user() -> str:
 def get_conn() -> Iterator:
     with db.connect() as conn:
         yield conn
-
-
-def get_storage() -> storage.Storage:
-    return storage.LocalStorage()

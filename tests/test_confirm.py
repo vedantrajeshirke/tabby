@@ -67,7 +67,7 @@ def test_build_expense_stores_edits_and_the_original_read():
     original = read(currency="EUR")
     values = form(total=12.345, note="  lunch ")
     edited = confirm.apply_edits(original, values)
-    expense = confirm.build_expense(original, edited, values, "Groceries", "rule", "files/a.png", "abc")
+    expense = confirm.build_expense(original, edited, values, "Groceries", "rule", "abc")
     assert (expense.total, expense.currency, expense.note, expense.file_hash) == (12.35, "EUR", "lunch", "abc")
     assert json.loads(expense.extraction_json)["total"] == 10.0
 

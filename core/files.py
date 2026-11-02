@@ -1,4 +1,4 @@
-"""Upload checks, hashing, image loading and PDF text/rendering."""
+"""Upload checks, hashing, image loading and PDF text/rendering. Uploads are read, never kept."""
 import hashlib
 import io
 from dataclasses import dataclass, field
@@ -16,8 +16,6 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_PDF_PAGES = 3
 MIN_TEXT_LAYER_CHARS = 20
 PDF_RENDER_DPI = 300
-STORED_MAX_SIZE = (2000, 2000)
-STORED_JPEG_QUALITY = 80
 
 
 class FileRejected(ValueError):
@@ -32,9 +30,6 @@ class PdfContent:
     @property
     def has_text_layer(self) -> bool:
         return not self.page_images
-
-
-CONTENT_TYPES = {"jpg": "image/jpeg", "pdf": "application/pdf"}
 
 
 def extension(filename: str) -> str:
@@ -74,21 +69,3 @@ def load_pdf(file_bytes: bytes) -> PdfContent:
         if alnum_count(text) >= MIN_TEXT_LAYER_CHARS:
             return PdfContent(text=text)
         return PdfContent(text="", page_images=[page.to_image(resolution=PDF_RENDER_DPI).original for page in pages])
-
-
-def prepare_for_storage(file_bytes: bytes, filename: str) -> tuple[bytes, str] | None:
-    """Return (data, extension). Images are re-encoded, which drops GPS and all other metadata.
-
-    PDFs are kept as uploaded. Returns None for an image that can't be decoded, which isn't stored.
-    """
-    if extension(filename) == "pdf":
-        return file_bytes, "pdf"
-    try:
-        image = ImageOps.exif_transpose(Image.open(io.BytesIO(file_bytes)))
-        image = image.convert("RGB")
-    except Exception:
-        return None
-    image.thumbnail(STORED_MAX_SIZE)
-    buffer = io.BytesIO()
-    image.save(buffer, format="JPEG", quality=STORED_JPEG_QUALITY, optimize=True)
-    return buffer.getvalue(), "jpg"

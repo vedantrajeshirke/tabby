@@ -2,7 +2,8 @@
 
 > **Working name:** SnapSpend
 > **Type:** Personal expense tracker (case-study prototype)
-> **Stack:** React + FastAPI + Postgres, with Supabase for hosted accounts and files
+> **Receipts:** images are read and then discarded. Only the expense details, masked extracted text and a file hash are kept.
+> **Stack:** React + FastAPI + Postgres, with Supabase for hosted accounts
 > **Time:** the brief asks for 2–4 hours. The owner has chosen to go past that, and the submission must state the real time spent.
 > **Audience for this doc:** Claude Code (the implementer) and the project owner
 
@@ -72,7 +73,6 @@ The prototype is part of a hiring case study. It **must**:
 | Back end | Python 3.11+, FastAPI | Thin routes that call `core/` |
 | Database | Postgres via `psycopg` | Plain SQL, no ORM. Supabase hosted, Docker locally |
 | Accounts | Supabase Auth (Google and email/password) | Issues JWTs; the API verifies them |
-| Files | Supabase Storage hosted, local disk in local mode | Behind one interface; private, with short-lived links |
 | Images | Pillow + `pillow-heif` | HEIC support for iPhone photos |
 | PDF text | `pdfplumber` | Text layer, and rendering pages for OCR |
 | OCR | Tesseract via `pytesseract` | Installed in the API's Docker image |
@@ -83,7 +83,7 @@ The prototype is part of a hiring case study. It **must**:
 **Do not add other dependencies** without a clear reason noted in the README.
 
 ### Run modes
-- **Local:** `docker compose up` starts the front end, API and Postgres. `AUTH_MODE=local` uses one built-in demo user with no sign-in, and files stay on disk. No external account of any kind is needed, as the brief requires.
+- **Local:** `docker compose up` starts the front end, API and Postgres. `AUTH_MODE=local` uses one built-in demo user with no sign-in. No external account of any kind is needed, as the brief requires.
 - **Hosted:** `AUTH_MODE=supabase`. Every API request needs a valid JWT.
 
 The API checks at startup that Tesseract is available. If it isn't, `GET /api/status` reports it, and the front end shows install instructions while everything else stays usable.
@@ -97,7 +97,6 @@ AUTH_MODE=local             # local | supabase
 DATABASE_URL=               # Postgres connection string
 SUPABASE_URL=               # hosted only
 SUPABASE_SERVICE_KEY=       # hosted only, API server only, never sent to the browser
-FILE_STORAGE=local          # local | supabase
 CORS_ORIGINS=               # the front end's address
 ```
 Secrets are never committed. When `EXTRACTION_BACKEND=mock`, show a visible **"MOCK MODE — extraction is simulated"** banner on the capture page.
@@ -116,7 +115,6 @@ snapspend/
 │   ├── db.py                  # Schema, CRUD; every query takes user_id
 │   ├── models.py, files.py, ocr.py, parser.py, extraction.py
 │   ├── validation.py, duplicates.py, categorize.py, confirm.py
-│   ├── storage.py             # File storage interface: local | supabase
 │   ├── periods.py, insights.py
 ├── web/                       # React app: pages for sign-in, add expense, expenses, dashboard, settings
 ├── config/categories.json
@@ -132,15 +130,14 @@ All routes need a signed-in user, apart from the status check. The user always c
 | Route | Purpose |
 |---|---|
 | `GET /api/status` | Tesseract available, mock mode, run mode |
-| `POST /api/extractions` | Upload a file; returns the extraction, issues, suggested category and duplicate warnings. Saves nothing |
+| `POST /api/extractions` | Upload a file; returns the extraction, issues, suggested category and duplicate warnings. Keeps nothing, and the file is discarded |
 | `POST /api/validate` | Re-check edited form values |
-| `POST /api/expenses` | Save a confirmed expense, with its original file when there is one |
+| `POST /api/expenses` | Save a confirmed expense. No file is sent |
 | `GET /api/expenses`, `PATCH` / `DELETE /api/expenses/{id}` | List with period and category filters, edit, delete |
-| `GET /api/expenses/{id}/file` | Short-lived link to the original file |
 | `GET /api/dashboard` | All dashboard numbers and insights, computed on the server |
 | `GET` / `PUT /api/settings` | Name, budget, cycle start day |
 | `POST` / `DELETE /api/demo-data` | Load or remove synthetic data |
-| `DELETE /api/account` | Permanently delete the user's account, data and files |
+| `DELETE /api/account` | Permanently delete the user's account and data |
 
 ---
 
@@ -189,7 +186,7 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
 - Accept `jpg`, `jpeg`, `png`, `webp`, `heic`, `pdf`. Max 10 MB. Reject other types with a clear message.
 - Compute a SHA-256 hash of the **original bytes** for exact-duplicate detection.
 - For PDFs, process up to the first 3 pages; concatenate their text.
-- Save the original file through `storage.py`, at `<user_id>/<hash>.<ext>`, only after the user confirms. The API keeps nothing from the extraction step, so the browser sends the file again on save.
+- **The file is never stored.** The API reads it in memory and discards it. The browser shows its own local copy as the preview.
 - An "Enter manually instead" button is always available and opens the same confirm form, empty.
 
 ### 6.2 Getting text (P0)
@@ -314,7 +311,7 @@ Store `category_source` (`override | doc_type | rule | default | manual`) and sh
 
 ### 6.8 Confirm screen (P0)
 Two-column layout (stacks on mobile):
-- **Left:** file preview (image, or the rendered first page of a PDF).
+- **Left:** preview of the file, from the browser's own copy.
 - **Right:** editable form with merchant, date, total, category (dropdown), payment method, note, plus subtotal/tax/tip.
 - Validation issues are listed above the form; low-confidence fields are visually marked, and each field shows its `field_reason` as help text.
 - A collapsible **"Show extracted text"** section displays `raw_text` for transparency.
@@ -325,7 +322,7 @@ Two-column layout (stacks on mobile):
 - Table of expenses for the selected period: date, merchant, category, total, payment method, and a "synthetic" tag where applicable.
 - Filters: period (budget cycle), category.
 - Edit (reuses the confirm form) and delete (with a confirmation step).
-- Click a row to view its stored file.
+- Open a row to see its details and extracted text.
 
 ### 6.10 Settings (P0)
 - Display name (used in the insights greeting)
@@ -389,9 +386,8 @@ Ranking: `budget_pace` is always pinned first if it fires; the rest are sorted b
 
 ### 6.15 Accounts and data separation (P0)
 - **Sign-in:** Supabase Auth, with Google and email/password. Supabase handles password storage, resets and token refresh. The React app sends the access token as a `Bearer` header, and the API verifies its signature, expiry and audience on every request.
-- **Separation, checked twice:** every query in `core/db.py` is scoped by a required `user_id` that comes from the verified token, and Postgres row-level security enforces the same rule. Requesting another user's expense returns 404. Files live under the user's own folder in a private bucket and open only through short-lived links.
-- **Deleting an account** removes the user's rows, files and sign-in.
-- **Storage size:** photos are stored as compressed JPEG (the free tier has 1 GB of file storage), while the file hash is still taken from the original bytes so duplicates are detected.
+- **Separation, checked twice:** every query in `core/db.py` is scoped by a required `user_id` that comes from the verified token, and Postgres row-level security enforces the same rule. Requesting another user's expense returns 404.
+- **Deleting an account** removes the user's rows and sign-in.
 - **Reviewers:** sample receipts in `fixtures/sample_receipts/` are generated and contain no personal data. New accounts start empty and can load labeled synthetic data from Settings.
 - **Availability:** free Supabase projects pause after a week of inactivity, and free API hosts may sleep. Wake and re-test the hosted app before any review.
 
@@ -413,8 +409,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   payment_method TEXT,
   document_type TEXT,                 -- from extraction, or 'manual'
   note TEXT,
-  file_path TEXT,
-  file_hash TEXT,
+  file_hash TEXT,                     -- SHA-256 of the upload, for duplicate warnings only
   extraction_json JSONB,              -- full extraction incl. raw_text and items, for traceability
   is_synthetic BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -442,9 +437,9 @@ Row-level security is enabled on all three tables, limiting each row to its owne
 
 ## 8. Privacy and safety
 - **Local mode:** everything stays on the device, and nothing is sent to external services. The capture page says: "Your receipts are processed and stored only on this device."
-- **Hosted mode:** receipts are stored with Supabase and processed on the API server. The capture page says: "Your receipts are stored in your private account on our hosting providers. Delete your account at any time to remove them."
+- **Hosted mode:** uploads are processed on the API server and discarded. Expense details and masked text are stored with Supabase. The capture page says: "Your receipt is read and then discarded. The details you save stay in your private account, and you can delete them at any time."
 - Never log raw text, file contents or tokens; log errors only.
-- **Keep less:** before anything is stored, strip all photo metadata, including GPS location (real iPhone photos contain it), by re-encoding the image. Mask card numbers, long digit runs, and login or password lines in `raw_text`. The hash is still taken from the original bytes.
+- **Keep less:** images and PDFs are never stored, which also keeps their metadata (real iPhone photos contain GPS) and any printed card digits off the server. Before text is stored, mask card numbers, long digit runs, and login or password lines.
 - **Never in logs or error reports:** receipt fields, merchants, amounts, emails, file names, tokens, signed links, or request bodies. Errors returned to the browser never include stack traces or internal details.
 - **Browser:** API responses carry `Cache-Control: no-store`, tokens never appear in URLs, and a Content Security Policy limits what scripts can run. No third-party analytics, ads or error trackers. Signing out clears cached receipt data.
 - **Never in the repo or images:** `.env` files, keys, real receipts and databases. `.gitignore` and `.dockerignore` both exclude them, and a test fails if a tracked file breaks this rule.
@@ -477,7 +472,7 @@ Row-level security is enabled on all three tables, limiting each row to its owne
 - `periods.py`: cycle start day 1 and 15; month boundaries; February.
 - `insights.py`: each P0 generator fires and doesn't fire at its thresholds; ranking pins `budget_pace` and caps at 3; empty state.
 
-- **Accounts and separation (must pass, run against real Postgres):** requests without a token, with an expired token, or with a bad signature get 401. User B can't read, edit, delete, or get the file of User A's expense. Duplicates, overrides, settings, dashboard totals and demo-data removal never cross users. Row-level security blocks access even when a query omits its filter. Deleting an account removes that user's rows and files and nobody else's.
+- **Accounts and separation (must pass, run against real Postgres):** requests without a token, with an expired token, or with a bad signature get 401. User B can't read, edit or delete User A's expense. Duplicates, overrides, settings, dashboard totals and demo-data removal never cross users. Row-level security blocks access even when a query omits its filter. Deleting an account removes that user's rows and nobody else's.
 - **API:** each route's success path and its helpful error paths; nothing is saved by `POST /api/extractions`.
 - **End to end (Playwright):** upload → confirm → saved → visible in the list and dashboard, on desktop and phone sizes.
 
@@ -502,10 +497,10 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 | # | Milestone | Acceptance criteria |
 |---|---|---|
 | M5 | New foundation | Repo restructured, `docker compose up` runs React, FastAPI and Postgres, `core/db.py` on Postgres with `user_id`, existing tests passing |
-| M6 | API | Extract, validate, save, list, edit, delete, file and settings routes, using the local demo user, with tests |
-| M7 | Accounts and separation | Supabase JWT verification, row-level security, storage interface with both backends, account deletion, the separation tests in section 9 passing |
+| M6 | API | Extract, validate, save, list, edit, delete and settings routes, using the local demo user, with tests |
+| M7 | Accounts and separation | Supabase JWT verification, row-level security, account deletion, the separation tests in section 9 passing |
 | M8 | Add expense | Sign-in, phone-first upload and confirm screens, issues and field reasons, extracted text, manual entry, category override |
-| M9 | Expenses list | Filter by period and category, edit, delete, view the original file |
+| M9 | Expenses list | Filter by period and category, edit, delete, view details and extracted text |
 | M10 | Dashboard + insights | `periods.py`, all P0 dashboard sections, 4 P0 insight generators with tests, empty states |
 | M11 | Settings + demo data | Settings page, seed script and buttons, synthetic labels and toggle, generated sample receipts |
 | M12 | Deploy + finish | Hosted on Vercel and the chosen API host, Playwright flow passing, README complete |
@@ -513,7 +508,7 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 **Never cut:** the confirm step, validation, field confidence/reasons, mock labeling, invalid-input handling, or the separation tests.
 
 ### Stretch (P2, only after M12)
-- **Viewing and searching the items on a bill**, which the owner wants next: see what was bought on a given day, and search across bills.
+- **Viewing and searching the items on a bill**, which the owner wants next: see what was bought on a given day, and search across bills. Stored text and items in `extraction_json` make this possible for past receipts too.
 - **AI vision backend for more accuracy**, which is future scope and not paid for now. Testing on real receipts showed OCR results on borderline phone photos vary with the Tesseract version. (`EXTRACTION_BACKEND=claude` or `ollama`) implementing the same `ExtractionBackend` interface and returning the same `Extraction` model. Then a small script that runs every file in `fixtures/demo_files/` through both backends and reports field accuracy and seconds per file, for the case-study write-up.
 - Item name normalization and the `repeat_item` insight.
 - Home-currency display.

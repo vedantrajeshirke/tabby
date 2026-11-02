@@ -4,7 +4,7 @@ from datetime import date, datetime, timedelta, timezone
 
 import psycopg
 
-from core import categorize, confirm, db, files, storage
+from core import categorize, confirm, db
 from core.duplicates import find_duplicates
 from core.models import Extraction
 from core.validation import blocks_save, validate
@@ -103,49 +103,14 @@ def report_review(checked: Review) -> dict:
     return report(checked.issues, checked.blocked, checked.category, checked.category_source, checked.duplicates)
 
 
-def save(
-    conn: psycopg.Connection,
-    store: storage.Storage,
-    user_id: str,
-    checked: Review,
-    upload: tuple[bytes, str] | None = None,
-    always_use_category: bool = False,
-) -> int:
-    """Store the original, with metadata removed, then the expense. The hash is of the original bytes."""
-    file_path = file_hash = None
-    newly_stored = False
-    if upload:
-        file_bytes, filename = upload
-        file_hash = files.file_hash(file_bytes)
-        prepared = files.prepare_for_storage(file_bytes, filename)
-        if prepared:
-            data, ext = prepared
-            file_path = storage.file_key(user_id, file_hash, ext)
-            newly_stored = store.read(file_path) is None
-            store.save(file_path, data)
+def save(conn: psycopg.Connection, user_id: str, checked: Review, file_hash: str | None = None, always_use_category: bool = False) -> int:
     expense = confirm.build_expense(
-        checked.original, checked.edited, checked.form, checked.category, checked.category_source, file_path, file_hash
+        checked.original, checked.edited, checked.form, checked.category, checked.category_source, file_hash
     )
-    try:
-        expense_id = db.insert_expense(conn, user_id, expense)
-    except Exception:
-        if newly_stored:
-            store.delete(file_path)
-        raise
+    expense_id = db.insert_expense(conn, user_id, expense)
     if always_use_category and checked.edited.merchant and checked.category_source == SOURCE_MANUAL:
         db.set_override(conn, user_id, checked.edited.merchant, checked.category)
     return expense_id
-
-
-def delete(conn: psycopg.Connection, store: storage.Storage, user_id: str, expense_id: int) -> bool:
-    """Delete the expense, and its file unless another expense uses the same one."""
-    removed = db.delete_expense(conn, user_id, expense_id)
-    if removed is None:
-        return False
-    path = removed["file_path"]
-    if path and db.count_file_uses(conn, user_id, path) == 0:
-        store.delete(path)
-    return True
 
 
 def existing_as_extraction(row: dict) -> Extraction:

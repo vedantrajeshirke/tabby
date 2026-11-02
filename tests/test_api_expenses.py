@@ -1,17 +1,14 @@
-import io
-import json
 import logging
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from PIL import Image
 
 from api import deps
 from api.main import app
 from core import db
-from core.storage import LocalStorage
-from tests.helpers import image_bytes, text_pdf
+from core import files
+from tests.helpers import text_pdf
 
 USER_A = "00000000-0000-0000-0000-00000000000a"
 USER_B = "00000000-0000-0000-0000-00000000000b"
@@ -20,18 +17,15 @@ PDF = text_pdf(RECEIPT)
 
 
 @pytest.fixture
-def api(conn, tmp_path, monkeypatch):
+def api(conn, monkeypatch):
     """Runs the real app against real Postgres, with a switchable current user."""
     monkeypatch.setenv("EXTRACTION_BACKEND", "local")
     monkeypatch.setenv("AUTH_MODE", "local")
     state = {"user": USER_A}
-    store = LocalStorage(tmp_path / "files")
     app.dependency_overrides[deps.current_user] = lambda: state["user"]
     app.dependency_overrides[deps.get_conn] = lambda: conn
-    app.dependency_overrides[deps.get_storage] = lambda: store
     client = TestClient(app, raise_server_exceptions=False)
     client.state = state
-    client.store = store
     client.db = conn
     yield client
     app.dependency_overrides.clear()
@@ -41,9 +35,8 @@ def form(**changes):
     return {"merchant": "Safeway", "date": "2026-10-28", "total": 10.0, **changes}
 
 
-def post_expense(api, file=None, **changes):
-    files = {"file": file} if file else None
-    return api.post("/api/expenses", data={"data": json.dumps(form(**changes))}, files=files)
+def post_expense(api, **changes):
+    return api.post("/api/expenses", json=form(**changes))
 
 
 def extract(api, name="r.pdf", data=PDF):
@@ -57,14 +50,13 @@ def count(api):
 # Extracting
 
 
-def test_extract_reads_file_and_saves_nothing(api, tmp_path):
+def test_extract_reads_file_and_saves_nothing(api):
     response = extract(api)
     assert response.status_code == 200
     body = response.json()
     assert body["extraction"]["total"] == 1.80
     assert (body["category"], body["category_source"], body["blocks_save"]) == ("Groceries", "rule", False)
     assert count(api) == 0
-    assert not (tmp_path / "files").exists()
 
 
 @pytest.mark.parametrize(
@@ -128,18 +120,36 @@ def test_validate_finds_likely_duplicate(api):
 # Saving
 
 
-def test_save_end_to_end_with_stored_file(api):
-    extraction = extract(api).json()["extraction"]
-    response = post_expense(api, file=("r.pdf", PDF), total=1.80, extraction=extraction)
+def test_save_end_to_end_keeps_details_and_text_but_no_file(api):
+    body = extract(api).json()
+    response = post_expense(api, total=1.80, extraction=body["extraction"], file_hash=body["file_hash"])
     assert response.status_code == 201
     expense = response.json()["expense"]
-    assert (expense["total"], expense["has_file"], expense["category"]) == (1.80, True, "Groceries")
-    assert "file_path" not in expense and "user_id" not in expense
-    file_response = api.get(f"/api/expenses/{expense['id']}/file")
-    assert file_response.content == PDF
-    assert file_response.headers["content-type"] == "application/pdf"
-    assert file_response.headers["x-content-type-options"] == "nosniff"
-    assert "sandbox" in file_response.headers["content-security-policy"]
+    assert (expense["total"], expense["category"]) == (1.80, "Groceries")
+    assert not {"file_path", "file_hash", "user_id", "has_file"} & set(expense)
+    assert "BANANAS" in api.get(f"/api/expenses/{expense['id']}").json()["extraction"]["raw_text"]
+    assert api.get(f"/api/expenses/{expense['id']}/file").status_code == 404
+    columns = api.db.execute(
+        "SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'expenses'"
+    ).fetchall()
+    assert "file_path" not in {c["column_name"] for c in columns}
+
+
+def test_uploads_are_not_written_to_disk(api, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    post_expense(api, extraction=extract(api).json()["extraction"])
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_same_file_is_flagged_as_exact_duplicate_from_its_hash(api):
+    body = extract(api).json()
+    assert body["file_hash"] == files.file_hash(PDF)
+    post_expense(api, extraction=body["extraction"], file_hash=body["file_hash"], merchant="Different")
+    assert [d["kind"] for d in extract(api).json()["duplicates"]] == ["exact"]
+
+
+def test_bad_file_hash_is_refused(api):
+    assert post_expense(api, file_hash="../etc").status_code == 422
 
 
 def test_saved_extraction_is_redacted(api):
@@ -149,22 +159,6 @@ def test_saved_extraction_is_redacted(api):
     stored = api.db.execute("SELECT extraction_json::text AS j FROM expenses WHERE id = %s", (expense_id,)).fetchone()["j"]
     assert "1234" not in stored
     assert "1234" not in api.get(f"/api/expenses/{expense_id}").text
-
-
-def test_saved_photo_has_no_gps(api):
-    exif = Image.Exif()
-    exif.get_ifd(0x8825)[1] = "N"
-    photo = image_bytes(Image.new("RGB", (100, 100), "white"), "JPEG", exif=exif)
-    expense_id = post_expense(api, file=("p.jpg", photo)).json()["expense"]["id"]
-    stored = api.get(f"/api/expenses/{expense_id}/file").content
-    assert dict(Image.open(io.BytesIO(stored)).getexif()) == {}
-
-
-def test_duplicate_hash_uses_original_bytes_even_though_stored_file_differs(api):
-    photo = image_bytes(Image.new("RGB", (100, 100), "white"))
-    post_expense(api, file=("p.png", photo))
-    body = extract(api, "p.png", photo).json()
-    assert [d["kind"] for d in body["duplicates"]] == ["exact"]
 
 
 @pytest.mark.parametrize(
@@ -200,7 +194,7 @@ def test_bad_values_are_refused_without_a_server_error(api, changes):
 
 
 def test_invalid_json_and_category_are_refused(api):
-    response = api.post("/api/expenses", data={"data": "{"})
+    response = api.post("/api/expenses", content="{", headers={"Content-Type": "application/json"})
     assert response.status_code == 422
     assert "couldn't be read" in response.json()["detail"]
     assert post_expense(api, category="Not A Category").status_code == 422
@@ -215,15 +209,6 @@ def test_always_use_category_applies_next_time(api):
     assert response.json()["expense"]["category_source"] == "manual"
     body = api.post("/api/validate", json=form(merchant="JOE'S DELI #12")).json()
     assert (body["category"], body["category_source"]) == ("Groceries", "override")
-
-
-def test_failed_insert_removes_the_new_file(api, monkeypatch):
-    def broken(*args):
-        raise RuntimeError("boom")
-
-    monkeypatch.setattr(db, "insert_expense", broken)
-    assert post_expense(api, file=("r.pdf", PDF)).status_code == 500
-    assert not list((api.store.root).rglob("*.pdf"))
 
 
 # Listing, editing, deleting
@@ -271,29 +256,6 @@ def test_edit_does_not_flag_itself_as_duplicate(api):
     assert api.patch(f"/api/expenses/{created['id']}", json={"note": "x"}).json()["duplicates"] == []
 
 
-def test_delete_removes_expense_and_file(api):
-    created = post_expense(api, file=("r.pdf", PDF)).json()["expense"]
-    assert api.delete(f"/api/expenses/{created['id']}").status_code == 204
-    assert api.get(f"/api/expenses/{created['id']}").status_code == 404
-    assert not list(api.store.root.rglob("*.pdf"))
-
-
-def test_shared_file_survives_until_the_last_expense_is_deleted(api):
-    first = post_expense(api, file=("r.pdf", PDF)).json()["expense"]
-    second = post_expense(api, file=("r.pdf", PDF), merchant="Other Shop").json()["expense"]
-    api.delete(f"/api/expenses/{first['id']}")
-    assert api.get(f"/api/expenses/{second['id']}/file").content == PDF
-    api.delete(f"/api/expenses/{second['id']}")
-    assert not list(api.store.root.rglob("*.pdf"))
-
-
-def test_expense_without_file_says_so(api):
-    created = post_expense(api).json()["expense"]
-    response = api.get(f"/api/expenses/{created['id']}/file")
-    assert response.status_code == 404
-    assert "No receipt file" in response.json()["detail"]
-
-
 # Settings
 
 
@@ -315,26 +277,29 @@ def test_categories(api):
 
 
 def test_another_users_expense_looks_missing(api):
-    created = post_expense(api, file=("r.pdf", PDF), merchant="Private Shop").json()["expense"]
+    created = post_expense(api, merchant="Private Shop").json()["expense"]
     url = f"/api/expenses/{created['id']}"
     api.state["user"] = USER_B
-    for response in (api.get(url), api.patch(url, json={"total": 1.0}), api.delete(url), api.get(f"{url}/file")):
+    for response in (api.get(url), api.patch(url, json={"total": 1.0}), api.delete(url)):
         assert response.status_code == 404
         assert "Private Shop" not in response.text
     assert api.get("/api/expenses").json() == []
     api.state["user"] = USER_A
     assert api.get(url).json()["total"] == 10.0
-    assert api.get(f"{url}/file").content == PDF
 
 
-def test_same_file_for_two_users_is_stored_and_deleted_separately(api):
-    first = post_expense(api, file=("r.pdf", PDF)).json()["expense"]
+def test_same_file_for_two_users_is_not_a_duplicate(api):
+    body = extract(api).json()
+    post_expense(api, extraction=body["extraction"], file_hash=body["file_hash"])
     api.state["user"] = USER_B
     assert extract(api).json()["duplicates"] == []
-    second = post_expense(api, file=("r.pdf", PDF)).json()["expense"]
-    api.delete(f"/api/expenses/{second['id']}")
-    api.state["user"] = USER_A
-    assert api.get(f"/api/expenses/{first['id']}/file").content == PDF
+
+
+def test_delete_removes_the_expense(api):
+    created = post_expense(api).json()["expense"]
+    assert api.delete(f"/api/expenses/{created['id']}").status_code == 204
+    assert api.get(f"/api/expenses/{created['id']}").status_code == 404
+    assert api.delete(f"/api/expenses/{created['id']}").status_code == 404
 
 
 def test_settings_and_overrides_stay_separate(api):

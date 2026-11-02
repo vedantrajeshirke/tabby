@@ -13,7 +13,7 @@ MAX_RAW_TEXT = 100_000
 
 def invalid_fields_message(errors: list[dict]) -> tuple[str, list[str]]:
     """Name the bad fields, without repeating the submitted values."""
-    fields = sorted({str(e["loc"][-1]) for e in errors if e["loc"]})
+    fields = sorted({str(e["loc"][-1]) for e in errors if e["loc"] and e["type"] != "json_invalid"})
     if not fields:
         return "This request couldn't be read. Refresh the page and try again.", []
     return f"Please check these fields: {', '.join(fields)}.", fields
@@ -65,6 +65,7 @@ class ExpenseForm(Strict):
     always_use_category: bool = False
     client_today: Date | None = None
     extraction: ExtractionIn | None = None
+    file_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")  # for duplicate checks only
 
 
 class ExpenseEdit(Strict):

@@ -23,7 +23,6 @@ class Expense:
     payment_method: str | None = None
     document_type: str | None = None
     note: str | None = None
-    file_path: str | None = None
     file_hash: str | None = None
     extraction_json: str | None = None
     is_synthetic: bool = False

@@ -61,7 +61,6 @@ def build_expense(
     form: FormValues,
     category: str,
     category_source: str,
-    file_path: str | None = None,
     file_hash: str | None = None,
 ) -> Expense:
     """`original` is stored as read, minus sensitive details, so the extraction stays traceable after edits."""
@@ -79,7 +78,6 @@ def build_expense(
         payment_method=edited.payment_method,
         document_type=original.document_type,
         note=form.note.strip() or None,
-        file_path=file_path,
         file_hash=file_hash,
         extraction_json=json.dumps(redact_value(original.to_dict())) if has_extraction else None,
     )
