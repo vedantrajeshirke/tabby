@@ -1,6 +1,7 @@
 """Duplicate detection: exact file matches and likely matching expenses."""
-import sqlite3
 from dataclasses import dataclass
+
+import psycopg
 
 from core import db
 from core.categorize import normalize_merchant
@@ -16,17 +17,18 @@ class DuplicateWarning:
     summary: str
 
 
-def _summary(row: sqlite3.Row) -> str:
+def _summary(row: dict) -> str:
     return f"{row['merchant']}, {row['date']}, ${row['total']:.2f}"
 
 
-def _is_same_expense(row: sqlite3.Row, merchant: str, total: float) -> bool:
+def _is_same_expense(row: dict, merchant: str, total: float) -> bool:
     same_total = round(abs(row["total"] - total), 2) <= TOTAL_TOLERANCE
     return same_total and normalize_merchant(row["merchant"]) == normalize_merchant(merchant)
 
 
 def find_duplicates(
-    conn: sqlite3.Connection,
+    conn: psycopg.Connection,
+    user_id: str,
     file_hash: str | None = None,
     merchant: str | None = None,
     day: str | None = None,
@@ -37,14 +39,14 @@ def find_duplicates(
     warnings: list[DuplicateWarning] = []
     seen = {exclude_id}
     if file_hash:
-        for row in db.expenses_with_hash(conn, file_hash):
+        for row in db.expenses_with_hash(conn, user_id, file_hash):
             if row["id"] not in seen:
                 seen.add(row["id"])
                 added = row["created_at"][:10]
                 message = f"You already added this file on {added}. Discard this one, or continue if it's a separate expense."
                 warnings.append(DuplicateWarning("exact", row["id"], message, _summary(row)))
     if merchant and day and total is not None:
-        for row in db.expenses_on_date(conn, day):
+        for row in db.expenses_on_date(conn, user_id, day):
             if row["id"] not in seen and _is_same_expense(row, merchant, total):
                 seen.add(row["id"])
                 message = "Looks similar to an expense you already saved. Discard this one, or continue if it's a separate expense."

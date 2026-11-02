@@ -1,20 +1,22 @@
-"""SQLite schema and CRUD (stdlib sqlite3, no ORM)."""
-import sqlite3
+"""Postgres schema and CRUD (psycopg, no ORM). Every query is scoped by a required user_id."""
 from dataclasses import asdict
-from pathlib import Path
+
+import psycopg
+from psycopg.rows import dict_row
 
 from core.categorize import normalize_merchant
-from core.config import DB_PATH
+from core.config import load_config
 from core.models import Expense, Settings
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS expenses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL,
   merchant TEXT NOT NULL,
-  date TEXT NOT NULL,
-  total REAL NOT NULL,
+  date DATE NOT NULL,
+  total NUMERIC(12,2) NOT NULL,
   currency TEXT NOT NULL DEFAULT 'USD',
-  subtotal REAL, tax REAL, tip REAL,
+  subtotal NUMERIC(12,2), tax NUMERIC(12,2), tip NUMERIC(12,2),
   category TEXT NOT NULL,
   category_source TEXT NOT NULL,
   payment_method TEXT,
@@ -22,110 +24,91 @@ CREATE TABLE IF NOT EXISTS expenses (
   note TEXT,
   file_path TEXT,
   file_hash TEXT,
-  extraction_json TEXT,
-  is_synthetic INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS line_items (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  expense_id INTEGER NOT NULL REFERENCES expenses(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  quantity REAL,
-  price REAL
+  extraction_json JSONB,
+  is_synthetic BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS merchant_overrides (
-  merchant_key TEXT PRIMARY KEY,
-  category TEXT NOT NULL
+  user_id UUID NOT NULL,
+  merchant_key TEXT NOT NULL,
+  category TEXT NOT NULL,
+  PRIMARY KEY (user_id, merchant_key)
 );
 
 CREATE TABLE IF NOT EXISTS settings (
-  key TEXT PRIMARY KEY,
-  value TEXT
+  user_id UUID PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  monthly_budget NUMERIC(12,2),
+  cycle_start_day INTEGER NOT NULL DEFAULT 1 CHECK (cycle_start_day BETWEEN 1 AND 28)
 );
-CREATE INDEX IF NOT EXISTS idx_expenses_date ON expenses(date);
-CREATE INDEX IF NOT EXISTS idx_expenses_hash ON expenses(file_hash);
+CREATE INDEX IF NOT EXISTS idx_expenses_user_date ON expenses(user_id, date);
+CREATE INDEX IF NOT EXISTS idx_expenses_user_hash ON expenses(user_id, file_hash);
+"""
+
+# Dates and amounts come back as plain strings and floats, the types the rest of core uses.
+EXPENSE_COLUMNS = """
+  id, user_id::text AS user_id, merchant, date::text AS date, total::float8 AS total, currency,
+  subtotal::float8 AS subtotal, tax::float8 AS tax, tip::float8 AS tip, category, category_source,
+  payment_method, document_type, note, file_path, file_hash, is_synthetic, created_at::text AS created_at
 """
 
 
-def connect(path: Path | str | None = None) -> sqlite3.Connection:
-    path = path or DB_PATH
-    if str(path) != ":memory:":
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+def connect(conninfo: str | None = None) -> psycopg.Connection:
+    url = load_config().database_url if conninfo is None else conninfo
+    return psycopg.connect(url, row_factory=dict_row, autocommit=True)
 
 
-def init_db(path: Path | str | None = None) -> None:
+def init_db(conn: psycopg.Connection) -> None:
     """Create the schema if it doesn't exist. Safe to call on every startup."""
-    conn = connect(path)
-    try:
-        conn.executescript(SCHEMA)
-    finally:
-        conn.close()
+    conn.execute(SCHEMA)
 
 
-def get_setting(conn: sqlite3.Connection, key: str, default: str | None = None) -> str | None:
-    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
-    return row["value"] if row and row["value"] is not None else default
+def load_settings(conn: psycopg.Connection, user_id: str) -> Settings:
+    row = conn.execute(
+        "SELECT name, monthly_budget::float8 AS monthly_budget, cycle_start_day FROM settings WHERE user_id = %s",
+        (user_id,),
+    ).fetchone()
+    return Settings(**row) if row else Settings()
 
 
-def set_setting(conn: sqlite3.Connection, key: str, value: str | None) -> None:
+def save_settings(conn: psycopg.Connection, user_id: str, s: Settings) -> None:
     conn.execute(
-        "INSERT INTO settings (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (key, value),
+        "INSERT INTO settings (user_id, name, monthly_budget, cycle_start_day) VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (user_id) DO UPDATE SET name = excluded.name, "
+        "monthly_budget = excluded.monthly_budget, cycle_start_day = excluded.cycle_start_day",
+        (user_id, s.name.strip(), s.monthly_budget, s.cycle_start_day),
     )
 
 
-def load_settings(conn: sqlite3.Connection) -> Settings:
-    budget = get_setting(conn, "monthly_budget")
-    try:
-        day = int(get_setting(conn, "cycle_start_day", "1"))
-    except ValueError:
-        day = 1
-    return Settings(
-        name=get_setting(conn, "name", "") or "",
-        monthly_budget=float(budget) if budget else None,
-        cycle_start_day=min(max(day, 1), 28),
-    )
+def get_overrides(conn: psycopg.Connection, user_id: str) -> dict[str, str]:
+    rows = conn.execute("SELECT merchant_key, category FROM merchant_overrides WHERE user_id = %s", (user_id,))
+    return {r["merchant_key"]: r["category"] for r in rows}
 
 
-def save_settings(conn: sqlite3.Connection, s: Settings) -> None:
-    set_setting(conn, "name", s.name.strip())
-    set_setting(conn, "monthly_budget", None if s.monthly_budget is None else str(s.monthly_budget))
-    set_setting(conn, "cycle_start_day", str(s.cycle_start_day))
-    conn.commit()
-
-
-def get_overrides(conn: sqlite3.Connection) -> dict[str, str]:
-    return {r["merchant_key"]: r["category"] for r in conn.execute("SELECT * FROM merchant_overrides")}
-
-
-def set_override(conn: sqlite3.Connection, merchant: str, category: str) -> None:
+def set_override(conn: psycopg.Connection, user_id: str, merchant: str, category: str) -> None:
     conn.execute(
-        "INSERT INTO merchant_overrides (merchant_key, category) VALUES (?, ?) "
-        "ON CONFLICT(merchant_key) DO UPDATE SET category = excluded.category",
-        (normalize_merchant(merchant), category),
+        "INSERT INTO merchant_overrides (user_id, merchant_key, category) VALUES (%s, %s, %s) "
+        "ON CONFLICT (user_id, merchant_key) DO UPDATE SET category = excluded.category",
+        (user_id, normalize_merchant(merchant), category),
     )
-    conn.commit()
 
 
-def expenses_with_hash(conn: sqlite3.Connection, file_hash: str) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM expenses WHERE file_hash = ? ORDER BY id", (file_hash,)).fetchall()
+def expenses_with_hash(conn: psycopg.Connection, user_id: str, file_hash: str) -> list[dict]:
+    query = f"SELECT {EXPENSE_COLUMNS} FROM expenses WHERE user_id = %s AND file_hash = %s ORDER BY id"
+    return conn.execute(query, (user_id, file_hash)).fetchall()
 
 
-def expenses_on_date(conn: sqlite3.Connection, day: str) -> list[sqlite3.Row]:
-    return conn.execute("SELECT * FROM expenses WHERE date = ? ORDER BY id", (day,)).fetchall()
+def expenses_on_date(conn: psycopg.Connection, user_id: str, day: str) -> list[dict]:
+    query = f"SELECT {EXPENSE_COLUMNS} FROM expenses WHERE user_id = %s AND date = %s::date ORDER BY id"
+    return conn.execute(query, (user_id, day)).fetchall()
 
 
-def insert_expense(conn: sqlite3.Connection, expense: Expense) -> int:
-    values = asdict(expense)
+def insert_expense(conn: psycopg.Connection, user_id: str, expense: Expense) -> int:
+    values = {**asdict(expense), "user_id": user_id}
     columns = ", ".join(values)
-    placeholders = ", ".join("?" for _ in values)
-    cursor = conn.execute(f"INSERT INTO expenses ({columns}) VALUES ({placeholders})", tuple(values.values()))
-    conn.commit()
-    return cursor.lastrowid
+    placeholders = ", ".join("%s" for _ in values)
+    row = conn.execute(
+        f"INSERT INTO expenses ({columns}) VALUES ({placeholders}) RETURNING id", tuple(values.values())
+    ).fetchone()
+    return row["id"]

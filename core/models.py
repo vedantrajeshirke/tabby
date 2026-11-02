@@ -26,7 +26,7 @@ class Expense:
     file_path: str | None = None
     file_hash: str | None = None
     extraction_json: str | None = None
-    is_synthetic: int = 0
+    is_synthetic: bool = False
 
 
 @dataclass

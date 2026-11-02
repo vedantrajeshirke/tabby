@@ -16,7 +16,7 @@ SECRET_PATTERNS = {
     "API key": r"\bsk-[A-Za-z0-9_-]{20,}",
     "database URL with a password": r"postgres(ql)?://[^\s:/]+:[^\s@/]+@",
     "private key": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
-    "full card number": r"\b(?:\d[ -]?){15,16}\b",
+    "full card number": r"(?<![\d-])[3-6](?:[ -]?\d){14,15}(?![\d-])",  # card networks start with 3-6
 }
 
 
@@ -43,6 +43,21 @@ def test_no_secrets_in_tracked_files():
             continue
         found += [f"{name}: {label}" for label, pattern in SECRET_PATTERNS.items() if re.search(pattern, text)]
     assert found == []  # names only, so a failure never prints the secret
+
+
+@pytest.mark.parametrize(
+    "text, found",
+    [
+        ("4111 1111 1111 1111", True),
+        ("4111-1111-1111-1111", True),
+        ("4111111111111111", True),
+        ("00000000-0000-0000-0000-000000000001", False),
+        ("****1234", False),
+        ("555-010-0199", False),
+    ],
+)
+def test_card_pattern(text, found):
+    assert bool(re.search(SECRET_PATTERNS["full card number"], text)) is found
 
 
 @pytest.mark.parametrize(

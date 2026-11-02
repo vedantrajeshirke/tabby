@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = ROOT / "data"
-DB_PATH = DATA_DIR / "app.db"
 CATEGORIES_PATH = ROOT / "config" / "categories.json"
+LOCAL_USER_ID = "00000000-0000-0000-0000-000000000001"  # the built-in demo user in local mode
 
 load_dotenv(ROOT / ".env")
 
@@ -19,18 +19,26 @@ class Config:
     extraction_backend: str
     tesseract_cmd: str
     ocr_min_confidence: float
-    hosted_demo: bool = False
+    auth_mode: str = "local"
+    database_url: str = ""  # empty = use the standard PG* environment variables
+
+
+def _env(name: str, default: str = "") -> str:
+    return os.getenv(name, default).split("#")[0].strip()
 
 
 def load_config() -> Config:
-    backend = os.getenv("EXTRACTION_BACKEND", "local").split("#")[0].strip().lower() or "local"
-    cmd = os.getenv("TESSERACT_CMD", "").split("#")[0].strip()
     try:
-        min_conf = float(os.getenv("OCR_MIN_CONFIDENCE", "50").split("#")[0].strip())
+        min_conf = float(_env("OCR_MIN_CONFIDENCE", "50"))
     except ValueError:
         min_conf = 50.0
-    hosted = os.getenv("HOSTED_DEMO", "false").split("#")[0].strip().lower() == "true"
-    return Config(backend, cmd, min_conf, hosted)
+    return Config(
+        extraction_backend=_env("EXTRACTION_BACKEND", "local").lower() or "local",
+        tesseract_cmd=_env("TESSERACT_CMD"),
+        ocr_min_confidence=min_conf,
+        auth_mode=_env("AUTH_MODE", "local").lower() or "local",
+        database_url=os.getenv("DATABASE_URL", "").strip(),
+    )
 
 
 def find_tesseract(cfg: Config | None = None) -> str | None:
@@ -42,6 +50,6 @@ def find_tesseract(cfg: Config | None = None) -> str | None:
 
 
 TESSERACT_INSTALL_HELP = (
-    "Mac: `brew install tesseract` · Linux: `sudo apt install tesseract-ocr` · "
-    "Windows: install the UB Mannheim build and set `TESSERACT_CMD` in `.env`."
+    "Mac: brew install tesseract. Linux: sudo apt install tesseract-ocr. "
+    "Windows: install the UB Mannheim build and set TESSERACT_CMD in .env."
 )
