@@ -5,7 +5,7 @@
   "generic_keywords": ["CAFE", "COFFEE", "METRO", "TRANSIT"],
   "rules": [
     { "keywords": ["DOORDASH", "UBER EATS", "GRUBHUB"], "category": "Food Delivery" },
-    { "keywords": ["TRADER JOE", "WHOLE FOODS", "SAFEWAY", "H MART", "ALDI", "COSTCO", "KROGER"], "category": "Groceries" },
+    { "keywords": ["TRADER JOE", "WHOLE FOODS", "SAFEWAY", "H MART", "ALDI", "COSTCO", "KROGER", "RALPHS"], "category": "Groceries" },
     { "keywords": ["STARBUCKS", "CHIPOTLE", "MCDONALD", "CAFE", "COFFEE"], "category": "Restaurants & Cafes" },
     { "keywords": ["UBER", "LYFT", "METRO", "TRANSIT"], "category": "Transport" },
     { "keywords": ["NETFLIX", "SPOTIFY", "ICLOUD"], "category": "Subscriptions" },

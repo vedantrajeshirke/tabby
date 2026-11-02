@@ -139,10 +139,45 @@ def test_too_little_text_unreadable():
     assert parse_fixture("too_short").document_type == "unreadable"
 
 
-def test_low_confidence_unreadable():
-    e = parse((FIXTURES / "grocery.txt").read_text(), text_confidence=30.0, min_confidence=50.0)
+def test_low_confidence_without_total_line_or_date_is_unreadable():
+    text = "Some blurry words here\nNothing useful 12.00\n10/14/2026"
+    e = parse(text, text_confidence=30.0, min_confidence=50.0)
     assert e.document_type == "unreadable"
     assert e.total is None
+    assert parse("Some blurry words here\nTOTAL 12.00 again", text_confidence=30.0).document_type == "unreadable"
+
+
+def test_low_confidence_with_total_and_date_is_rescued_as_low():
+    e = parse((FIXTURES / "grocery.txt").read_text(), text_confidence=30.0, min_confidence=50.0, merchant_keywords=KEYWORDS)
+    assert e.document_type == "receipt"
+    assert e.total == 11.53
+    assert set(e.field_confidence.values()) == {"low"}
+    assert "please check" in e.field_reason["total"]
+    assert "below 50" in e.field_reason["document_type"]
+
+
+def test_normal_confidence_is_not_marked_low():
+    assert parse_fixture("grocery").field_confidence["total"] == "high"
+
+
+def test_card_charge_line_is_medium_total():
+    e = parse("Some Shop Name\nWidget 40.00\nSoda 2.00\nCredit $36.94\nmore text here")
+    assert (e.total, e.field_confidence["total"]) == (36.94, "medium")
+    assert "card charge" in e.field_reason["total"]
+
+
+def test_total_line_beats_card_charge():
+    assert parse("Some Shop Name\nDEBIT 5.00\nTOTAL 9.00\nmore text here").total == 9.00
+
+
+def test_refund_line_is_not_a_card_charge():
+    e = parse("Some Shop Name\nREFUND TO CREDIT CARD 36.94\nItem 5.00\nmore text here")
+    assert e.field_confidence["total"] == "low"
+
+
+def test_total_number_of_items_is_not_a_total():
+    e = parse("Some Shop Name\nBALANCE 9.00\nTOTAL NUMBER OF ITEMS 2.00\nmore text")
+    assert e.total == 9.00
 
 
 def test_no_total_keyword_falls_back_low():
@@ -233,3 +268,15 @@ def test_not_amounts(text):
 
 def test_short_dashed_numbers_are_not_dates():
     assert receipt_with("Ref 10-12-26").date is None
+
+
+def test_taxes_plural_is_tax():
+    assert receipt_with("Taxes $2.33").tax == 2.33
+
+
+def test_number_led_line_is_not_a_merchant():
+    assert parse("2600 South Main\nPine Grocers\nWidget 5.00\nTOTAL 5.00").merchant == "Pine Grocers"
+
+
+def test_ralphs_is_known_even_as_plural_keyword():
+    assert parse("RALPHS rewards CUSTOMER\nWidget 5.00\nTOTAL 5.00", merchant_keywords=KEYWORDS).merchant == "Ralphs"

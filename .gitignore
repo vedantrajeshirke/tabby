@@ -7,3 +7,4 @@ data/*
 !data/.gitkeep
 fixtures/demo_files/*
 !fixtures/demo_files/.gitkeep
+.DS_Store

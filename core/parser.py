@@ -16,9 +16,11 @@ AMOUNT_RE = re.compile(
 )
 
 TOTAL_KEYWORDS = ["GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "BALANCE TO PAY", "TOTAL", "AMOUNT PAID", "CHARGED", "BALANCE"]
-TOTAL_EXCLUDE_RE = re.compile(r"SUB[\s-]?TOTAL|TOTAL (SAVINGS|SAVED|DISCOUNT|ITEMS|TAX)")
+TOTAL_EXCLUDE_RE = re.compile(r"SUB[\s-]?TOTAL|TOTAL (SAVINGS|SAVED|DISCOUNT|ITEMS|NUMBER|TAX)")
+CARD_CHARGE_RE = re.compile(r"\b(CREDIT|DEBIT)\b")
+CARD_CHARGE_EXCLUDE_RE = re.compile(r"REFUND|RETURN")
 SUBTOTAL_RE = re.compile(r"\bSUB[\s-]?TOTAL\b")
-TAX_RE = re.compile(r"\bTAX\d*\b")
+TAX_RE = re.compile(r"\bTAX(?:ES|\d*)\b")
 TAX_EXCLUDE_RE = re.compile(r"TOTAL|PRE-TAX|TAXABLE")
 TIP_RE = re.compile(r"\b(TIP|GRATUITY)\b")
 TIP_EXCLUDE_RE = re.compile(r"SUGGEST|GUIDE")
@@ -29,7 +31,7 @@ CARD_RE = re.compile(r"\b(VISA|MASTERCARD|AMEX|DISCOVER|DEBIT|CREDIT)\b")
 CASH_RE = re.compile(r"\bCASH\b(?! BACK)")
 
 NON_ITEM_RE = re.compile(
-    r"(?<![A-Z])(SUB[\s-]?TOTAL|TOTAL|TAX\d*|TIP|GRATUITY|AMOUNT DUE|BALANCE|AMOUNT PAID|CHARGED|"
+    r"(?<![A-Z])(SUB[\s-]?TOTAL|TOTAL|TAX(?:ES|\d*)|TIP|GRATUITY|AMOUNT DUE|BALANCE|AMOUNT PAID|CHARGED|"
     r"VISA|MASTERCARD|AMEX|DISCOVER|DEBIT|CREDIT|CASH|CHANGE|VENMO|ZELLE|PAYPAL)\b"
 )
 BARCODE_PREFIX_RE = re.compile(r"^\W*\d{6,}\s+")
@@ -51,6 +53,7 @@ STREET_RE = re.compile(
     re.I,
 )
 CITY_STATE_ZIP_RE = re.compile(r"\b[A-Z]{2}\s+\d{5}\b", re.I)
+LEADING_NUMBER_RE = re.compile(r"\d{3,}\s")  # usually an address even without a street word
 GENERIC_MERCHANT_RE = re.compile(r"\b(RECEIPT|WELCOME|THANK YOU|INVOICE|ORDER)\b", re.I)
 
 
@@ -91,9 +94,14 @@ def split_lines(text: str) -> list[str]:
     return [line.strip().replace("’", "'") for line in text.splitlines() if line.strip()]
 
 
+def _can_rescue(lines: list[str]) -> bool:
+    """Low-confidence text is still worth confirming if it has a total line and a date."""
+    return parse_total(lines)[1] in ("high", "medium") and bool(find_dates("\n".join(lines)))
+
+
 def classify_document(lines: list[str], text_confidence: float, min_confidence: float) -> tuple[str, str]:
     text = "\n".join(lines)
-    if text_confidence < min_confidence:
+    if text_confidence < min_confidence and not _can_rescue(lines):
         return "unreadable", f"text confidence {text_confidence:.0f} is below the minimum of {min_confidence:.0f}"
     if sum(ch.isalnum() for ch in text) < MIN_ALNUM_CHARS:
         return "unreadable", "too little text was found"
@@ -116,6 +124,13 @@ def parse_total(lines: list[str]) -> tuple[float | None, str | None, str, int | 
             # A zero "BALANCE DUE 0.00" after payment is not the amount of the purchase.
             if amount and not amount.negative and amount.value > 0:
                 return amount.value, "high", _found(lines[i]), i
+    for i in range(len(lines) - 1, -1, -1):  # "Credit $36.94" is the amount charged to the card
+        upper = lines[i].upper()
+        if not CARD_CHARGE_RE.search(upper) or CARD_CHARGE_EXCLUDE_RE.search(upper):
+            continue
+        amount = _last_amount(lines[i])
+        if amount and not amount.negative and amount.value > 0:
+            return amount.value, "medium", f"no total line found; used the card charge, {_found(lines[i])}", i
     positive = [a.value for line in lines for a in find_amounts(line) if not a.negative]
     if positive:
         return max(positive), "low", "no total line found; used the largest amount in the document", None
@@ -199,7 +214,7 @@ def _keyword_merchant(lines: list[str], keywords) -> tuple[str, str] | None:
 
 
 def _is_merchant_candidate(line: str) -> bool:
-    if sum(ch.isalpha() for ch in line) < 3:
+    if sum(ch.isalpha() for ch in line) < 3 or LEADING_NUMBER_RE.match(line):
         return False
     if find_amounts(line) or find_dates(line):
         return False
@@ -380,6 +395,17 @@ def _parse_receipt(extraction: Extraction, lines: list[str], keywords) -> None:
     extraction.field_reason["line_items"] = f"{len(extraction.line_items)} item lines found above the totals"
 
 
+def _mark_rescued(extraction: Extraction, min_confidence: float) -> None:
+    """OCR can misread digits at this quality, so everything found needs a human check."""
+    extraction.field_reason["document_type"] = (
+        f"text confidence {extraction.text_confidence:.0f} is below {min_confidence:.0f}, "
+        "but a total line and a date were found"
+    )
+    for name in extraction.field_confidence:
+        extraction.field_confidence[name] = "low"
+        extraction.field_reason[name] = f"{extraction.field_reason[name]} (low-quality scan, please check)"
+
+
 def parse(
     text: str,
     text_source: str = "ocr",
@@ -402,4 +428,6 @@ def parse(
     elif document_type == "receipt":
         _parse_shared_fields(extraction, text)
         _parse_receipt(extraction, lines, merchant_keywords)
+    if document_type in ("receipt", "payment_screenshot") and text_confidence < min_confidence:
+        _mark_rescued(extraction, min_confidence)
     return extraction
