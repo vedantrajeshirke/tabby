@@ -182,3 +182,54 @@ def test_currency(marker, expected, confidence):
 
 def test_cashier_is_not_cash():
     assert receipt_with("Cashier: Bob").payment_method is None
+
+
+def test_items_above_a_merchant_keyword_line_are_kept():
+    e = parse_fixture("keyword_on_item_line")
+    assert e.merchant == "Target"
+    assert [(i.name, i.quantity, i.price) for i in e.line_items] == [
+        ("GG MILK NF", None, 2.50),
+        ("ONION Ne", 2, 1.80),
+        ("Bag Fee", None, 0.10),
+    ]
+    assert round(sum(i.price for i in e.line_items), 2) == e.subtotal
+
+
+def test_noisy_photo_text():
+    e = parse_fixture("photo_noise")
+    assert e.currency == "USD"  # the stray pound sign isn't next to a number
+    assert e.date == "2026-10-27"
+    assert (e.total, e.field_confidence["total"]) == (7.59, "high")
+    assert e.merchant == "Trader Joe"  # from the footer, curly apostrophe included
+    assert e.field_confidence["merchant"] == "medium"
+    assert [(i.name, i.quantity, i.price) for i in e.line_items] == [
+        ("Tomato Soup", None, 3.49),
+        ("TEA BOX", None, 2.50),
+        ("PEAR EACH", 2, 1.60),
+    ]
+
+
+def test_bare_balance_is_a_total_but_ranks_below_total():
+    assert parse("Some Shop Name\nWidget 9.00\nBALANCE 9.00\nmore text here").total == 9.00
+    assert parse("Some Shop Name\nTOTAL 9.00\nGIFT CARD BALANCE 50.00").total == 9.00
+
+
+def test_merchant_trailing_noise_stripped():
+    assert parse("PINE GROCERS ;\nWidget 5.00\nTOTAL 5.00 and more").merchant == "Pine Grocers"
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [("$3,49", 3.49), ("€12,50", 12.50), ("$1,234.56", 1234.56)],
+)
+def test_decimal_comma_next_to_symbol(text, expected):
+    assert [a.value for a in find_amounts(text)] == [expected]
+
+
+@pytest.mark.parametrize("text", ["3,49", "$1,234", "12-34-56"])
+def test_not_amounts(text):
+    assert find_amounts(text) == []
+
+
+def test_short_dashed_numbers_are_not_dates():
+    assert receipt_with("Ref 10-12-26").date is None

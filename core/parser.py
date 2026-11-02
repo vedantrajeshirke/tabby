@@ -6,12 +6,16 @@ from datetime import date
 from core.models import Extraction, LineItem
 
 MIN_ALNUM_CHARS = 20
+FOOTER_LINES = 5
 DEFAULT_MIN_CONFIDENCE = 50.0
 
 # Spec amount pattern, plus guards so phone numbers, dotted dates and percentages don't count as money.
-AMOUNT_RE = re.compile(r"(?<![\d.])[$€£₹]?\s?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})(?!\d)(?!\.\d)(?!\s?%)")
+# A decimal comma ("$3,49") is accepted only next to a currency symbol, where it can't be a plain number.
+AMOUNT_RE = re.compile(
+    r"(?<![\d.])(?:[$€£₹]?\s?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})|[$€£₹]\s?(\d+,\d{2}))(?!\d)(?!\.\d)(?!\s?%)"
+)
 
-TOTAL_KEYWORDS = ["GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "TOTAL", "AMOUNT PAID", "CHARGED"]
+TOTAL_KEYWORDS = ["GRAND TOTAL", "AMOUNT DUE", "BALANCE DUE", "BALANCE TO PAY", "TOTAL", "AMOUNT PAID", "CHARGED", "BALANCE"]
 TOTAL_EXCLUDE_RE = re.compile(r"SUB[\s-]?TOTAL|TOTAL (SAVINGS|SAVED|DISCOUNT|ITEMS|TAX)")
 SUBTOTAL_RE = re.compile(r"\bSUB[\s-]?TOTAL\b")
 TAX_RE = re.compile(r"\bTAX\d*\b")
@@ -25,14 +29,17 @@ CARD_RE = re.compile(r"\b(VISA|MASTERCARD|AMEX|DISCOVER|DEBIT|CREDIT)\b")
 CASH_RE = re.compile(r"\bCASH\b(?! BACK)")
 
 NON_ITEM_RE = re.compile(
-    r"\b(SUB[\s-]?TOTAL|TOTAL|TAX\d*|TIP|GRATUITY|AMOUNT DUE|BALANCE|AMOUNT PAID|CHARGED|"
+    r"(?<![A-Z])(SUB[\s-]?TOTAL|TOTAL|TAX\d*|TIP|GRATUITY|AMOUNT DUE|BALANCE|AMOUNT PAID|CHARGED|"
     r"VISA|MASTERCARD|AMEX|DISCOVER|DEBIT|CREDIT|CASH|CHANGE|VENMO|ZELLE|PAYPAL)\b"
 )
+BARCODE_PREFIX_RE = re.compile(r"^\W*\d{6,}\s+")
+QTY_LINE_RE = re.compile(r"^\W*(\d+(?:\.\d+)?)\s*@\s*\$?\s?(\d+\.\d{2})")
 QTY_RE = re.compile(r"\b(\d+(?:\.\d+)?)\s*(?:@|[xX]\b)\s*(?:\$?\s?(\d+\.\d{2}))?")
 
 MONTHS = {m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())}
 MONTH = r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
 SLASH_DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})/(\d{4}|\d{2})\b")
+DASH_DATE_RE = re.compile(r"\b(\d{1,2})-(\d{1,2})-(\d{4})\b")  # 4-digit year only; shorter runs are usually IDs
 ISO_DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
 MONTH_FIRST_RE = re.compile(rf"\b{MONTH}\.?\s+(\d{{1,2}}),?\s+(\d{{4}})\b", re.I)
 DAY_FIRST_RE = re.compile(rf"\b(\d{{1,2}})\s+{MONTH}\.?,?\s+(\d{{4}})\b", re.I)
@@ -62,7 +69,8 @@ def find_amounts(line: str) -> list[Amount]:
         after = line[m.end() :].lstrip()
         signed = before.endswith(("-", "−", "(")) and not (len(before) > 1 and before[-2].isalnum())
         negative = signed or after.startswith(("-", ")"))
-        amounts.append(Amount(float(m.group(1).replace(",", "")), negative, m.start(), m.end()))
+        value = m.group(1).replace(",", "") if m.group(1) else m.group(2).replace(",", ".")
+        amounts.append(Amount(float(value), negative, m.start(), m.end()))
     return amounts
 
 
@@ -76,11 +84,11 @@ def _found(line: str) -> str:
 
 
 def _title_case(text: str) -> str:
-    return re.sub(r"[A-Za-z]+(?:'[A-Za-z]+)?", lambda m: m.group(0).capitalize(), text).strip()
+    return re.sub(r"[A-Za-z]+(?:'[A-Za-z]+)?", lambda m: m.group(0).capitalize(), text).strip(" ;:,.-|~")
 
 
 def split_lines(text: str) -> list[str]:
-    return [line.strip() for line in text.splitlines() if line.strip()]
+    return [line.strip().replace("’", "'") for line in text.splitlines() if line.strip()]
 
 
 def classify_document(lines: list[str], text_confidence: float, min_confidence: float) -> tuple[str, str]:
@@ -99,7 +107,7 @@ def classify_document(lines: list[str], text_confidence: float, min_confidence: 
 def parse_total(lines: list[str]) -> tuple[float | None, str | None, str, int | None]:
     """Return (total, confidence, reason, line index)."""
     for keyword in TOTAL_KEYWORDS:
-        pattern = re.compile(rf"\b{keyword}\b")
+        pattern = re.compile(rf"(?<![A-Z]){keyword}\b")  # OCR can glue digits on: "6BALANCE"
         for i in range(len(lines) - 1, -1, -1):
             upper = lines[i].upper()
             if not pattern.search(upper) or TOTAL_EXCLUDE_RE.search(upper):
@@ -160,6 +168,8 @@ def find_dates(text: str) -> list[date]:
     for m in SLASH_DATE_RE.finditer(text):
         year = int(m.group(3))
         found.append((m.start(), _safe_date(year if year >= 100 else 2000 + year, int(m.group(1)), int(m.group(2)))))
+    for m in DASH_DATE_RE.finditer(text):
+        found.append((m.start(), _safe_date(int(m.group(3)), int(m.group(1)), int(m.group(2)))))
     for m in ISO_DATE_RE.finditer(text):
         found.append((m.start(), _safe_date(int(m.group(1)), int(m.group(2)), int(m.group(3)))))
     for m in MONTH_FIRST_RE.finditer(text):
@@ -178,13 +188,13 @@ def parse_date(text: str) -> tuple[str | None, str | None, str]:
     return dates[0].isoformat(), "medium", f"found {len(set(dates))} different dates; used the first"
 
 
-def _keyword_merchant(lines: list[str], keywords) -> tuple[str, int] | None:
-    top = lines[:10]
-    for keyword in sorted(keywords, key=len, reverse=True):  # UBER EATS before UBER
+def _keyword_merchant(lines: list[str], keywords) -> tuple[str, str] | None:
+    """Return (keyword, line) for the longest keyword found, so UBER EATS wins over UBER."""
+    for keyword in sorted(keywords, key=len, reverse=True):
         pattern = re.compile(rf"\b{re.escape(keyword)}(?:'?S)?\b", re.I)
-        for i, line in enumerate(top):
+        for line in lines:
             if pattern.search(line):
-                return keyword, i
+                return keyword, line
     return None
 
 
@@ -197,16 +207,18 @@ def _is_merchant_candidate(line: str) -> bool:
     return not any(p.search(line) for p in bad_patterns)
 
 
-def parse_merchant(lines: list[str], keywords) -> tuple[str | None, str | None, str, int | None]:
-    """Return (merchant, confidence, reason, line index)."""
-    match = _keyword_merchant(lines, keywords)
+def parse_merchant(lines: list[str], keywords) -> tuple[str | None, str | None, str]:
+    """Return (merchant, confidence, reason)."""
+    match = _keyword_merchant(lines[:10], keywords)
     if match:
-        keyword, i = match
-        return _title_case(keyword), "high", f"known merchant keyword on line '{lines[i]}'", i
-    for i, line in enumerate(lines[:6]):
+        return _title_case(match[0]), "high", f"known merchant keyword on line '{match[1]}'"
+    match = _keyword_merchant(lines[-FOOTER_LINES:], keywords)  # the header is often misread
+    if match:
+        return _title_case(match[0]), "medium", f"known merchant keyword near the end, on line '{match[1]}'"
+    for line in lines[:6]:
         if _is_merchant_candidate(line):
-            return _title_case(line), "medium", f"first line that looks like a business name: '{line}'", i
-    return None, None, "no merchant found", None
+            return _title_case(line), "medium", f"first line that looks like a business name: '{line}'"
+    return None, None, "no merchant found"
 
 
 def parse_payment_method(text: str) -> tuple[str | None, str]:
@@ -226,9 +238,10 @@ def parse_currency(text: str) -> tuple[str, str, str]:
     """Return (currency, confidence, reason)."""
     upper = text.upper()
     for currency, pattern in (
-        ("EUR", r"€|\bEUR\b"),
-        ("GBP", r"£|\bGBP\b"),
-        ("INR", r"₹|\bINR\b"),
+        # Symbols must touch a number, because OCR noise often produces a stray one.
+        ("EUR", r"€\s?\d|\bEUR\b"),
+        ("GBP", r"£\s?\d|\bGBP\b"),
+        ("INR", r"₹\s?\d|\bINR\b"),
         ("CAD", r"CA\$|\bCAD\b"),
     ):
         if re.search(pattern, upper):
@@ -240,7 +253,7 @@ def parse_currency(text: str) -> tuple[str, str, str]:
 
 def _item_from_line(line: str, fallback_name: str = "") -> LineItem | None:
     amount = _last_amount(line)
-    if not amount or not re.fullmatch(r"\s*[-)]?\s*[A-Za-z]?\s*", line[amount.end :]):
+    if not amount or not re.fullmatch(r"\s*[-)]?\s*[A-Za-z]?[\s|.,'’]*", line[amount.end :]):
         return None
     price = -amount.value if amount.negative else amount.value
     qty = QTY_RE.search(line)
@@ -251,18 +264,32 @@ def _item_from_line(line: str, fallback_name: str = "") -> LineItem | None:
         name_part = line[: qty.start()]
     else:
         name_part = QTY_RE.sub("", line[: amount.start])
-    name = name_part.strip(" -:.\t") or fallback_name
+    name = BARCODE_PREFIX_RE.sub("", name_part).strip(" -:.\t") or fallback_name
     return LineItem(name=name, quantity=quantity, price=price) if name else None
 
 
-def parse_line_items(lines: list[str], start: int, end: int) -> list[LineItem]:
-    """Parse item lines in lines[start:end]; end is the subtotal or total line."""
+def _set_previous_quantity(items: list[LineItem], line: str) -> bool:
+    """Handle "ONION 1.98" followed by "2 @ 0.99 ea": the quantity belongs to the item above."""
+    m = QTY_LINE_RE.match(line)
+    if not (m and items and items[-1].price is not None):
+        return False
+    quantity, unit = float(m.group(1)), float(m.group(2))
+    if abs(quantity * unit - items[-1].price) > 0.01:
+        return False
+    items[-1].quantity = quantity
+    return True
+
+
+def parse_line_items(lines: list[str], end: int) -> list[LineItem]:
+    """Parse item lines above `end`, the subtotal or total line."""
     items: list[LineItem] = []
     pending_name = ""  # name-only line, for receipts that put "3 @ 0.29 0.87" on the next line
-    for line in lines[start:end]:
+    for line in lines[:end]:
         upper = line.upper()
         if NON_ITEM_RE.search(upper):
             pending_name = ""
+            continue
+        if not pending_name and _set_previous_quantity(items, line):
             continue
         letters = sum(ch.isalpha() for ch in line)
         if not find_amounts(line):
@@ -274,7 +301,7 @@ def parse_line_items(lines: list[str], start: int, end: int) -> list[LineItem]:
             item = _item_from_line(line, fallback_name=pending_name)
         else:
             item = None
-        if item:
+        if item and item.price != 0:
             items.append(item)
         pending_name = ""
     return items
@@ -336,7 +363,7 @@ def _parse_payment(extraction: Extraction, lines: list[str]) -> None:
 
 
 def _parse_receipt(extraction: Extraction, lines: list[str], keywords) -> None:
-    merchant, merchant_confidence, merchant_reason, merchant_line = parse_merchant(lines, keywords)
+    merchant, merchant_confidence, merchant_reason = parse_merchant(lines, keywords)
     _set_field(extraction, "merchant", merchant, merchant_confidence, merchant_reason)
     total, total_confidence, total_reason, total_line = parse_total(lines)
     _set_field(extraction, "total", total, total_confidence, total_reason)
@@ -347,9 +374,9 @@ def _parse_receipt(extraction: Extraction, lines: list[str], keywords) -> None:
     tip, tip_reason = parse_tip(lines)
     _set_field(extraction, "tip", tip, "high", tip_reason)
 
-    start = 0 if merchant_line is None else merchant_line + 1
+    # Scan from the top: a merchant keyword can sit on an item line ("TARGET BAG"), so it can't mark the header.
     end = next((i for i in (subtotal_line, total_line) if i is not None), len(lines))
-    extraction.line_items = parse_line_items(lines, start, end)
+    extraction.line_items = parse_line_items(lines, end)
     extraction.field_reason["line_items"] = f"{len(extraction.line_items)} item lines found above the totals"
 
 

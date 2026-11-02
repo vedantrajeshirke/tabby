@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 data/*
 !data/.gitkeep
+fixtures/demo_files/*
+!fixtures/demo_files/.gitkeep
