@@ -24,3 +24,5 @@ data/*
 fixtures/demo_files/*
 !fixtures/demo_files/.gitkeep
 Case Study*.pdf
+test-results
+playwright-report

@@ -79,7 +79,9 @@ The prototype is part of a hiring case study. It **must**:
 | Data | pandas | Aggregations for dashboard and insights |
 | Hosting | Vercel (front end), Docker on Render or Fly.io (API) | Choose after checking current free-tier terms |
 | Tokens | PyJWT with `cryptography`, `httpx` | Verifying tokens, and removing a sign-in on account deletion |
-| Tests | pytest (API and `core/`), Playwright (end to end) | |
+| Sign-in screens | `@supabase/supabase-js` | Sign-in, resets and token refresh in the browser; PKCE keeps tokens out of URLs |
+| Font | `@fontsource-variable/inter` | Bundled with the app, so browsers make no request to a font service |
+| Tests | pytest (API and `core/`), Playwright (end to end) | `web/e2e/run.sh` uses a throwaway stack with mock receipts |
 
 **Do not add other dependencies** without a clear reason noted in the README.
 
@@ -98,6 +100,8 @@ AUTH_MODE=local             # local = demo user, no sign-in; if unset, sign-in i
 DATABASE_URL=               # Postgres connection string
 SUPABASE_URL=               # hosted only
 SUPABASE_SECRET_KEY=        # hosted only, API server only, never sent to the browser
+SUPABASE_PUBLISHABLE_KEY=   # hosted only, public by design, used by the sign-in screen
+AUTH_GOOGLE=                # true shows "Continue with Google", once it's enabled in Supabase
 CORS_ORIGINS=               # the front end's address
 ```
 Secrets are never committed. When `EXTRACTION_BACKEND=mock`, show a visible **"MOCK MODE — extraction is simulated"** banner on the capture page.

@@ -1,1 +1,40 @@
 @import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+
+  /* Brand greens. Forest and pine are safe for text on white; sage and mint
+     are too faint for that, so they are fills only, with pine text on top. */
+  --color-forest: #2e6f40;
+  --color-mint: #cfffdc;
+  --color-sage: #68ba7f;
+  --color-pine: #253d2c;
+
+  /* Money and problems: ink for amounts, expense red for warnings and errors. */
+  --color-ink: #111714;
+  --color-muted: #5b6b60;
+  --color-line: #e3e9e5;
+  --color-expense: #b42318;
+  --color-expense-soft: #fdf0ee;
+  --color-caution: #7a5200;
+  --color-caution-soft: #fff6dc;
+}
+
+body {
+  background: #ffffff;
+  color: var(--color-ink);
+  font-feature-settings: "cv11", "ss03";
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Keeps digits lined up in amounts and tables. */
+.amount {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-forest);
+  outline-offset: 2px;
+}
