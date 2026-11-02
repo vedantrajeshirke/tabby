@@ -15,4 +15,5 @@ COPY fixtures/mock_extractions ./fixtures/mock_extractions
 RUN useradd --create-home app
 USER app
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+# Hosts choose the port through PORT.
+CMD ["sh", "-c", "exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000} --no-access-log"]
