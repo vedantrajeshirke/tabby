@@ -75,3 +75,23 @@ def test_short_text_triggers_render_path():
         content = files.load_pdf(b"irrelevant")
     page.to_image.assert_called_once_with(resolution=300)
     assert not content.has_text_layer
+
+
+def test_save_original_uses_hash_and_keeps_bytes(tmp_path):
+    path = files.save_original(b"abc", "Photo.HEIC", tmp_path / "files")
+    assert path.name == f"{files.file_hash(b'abc')}.heic"
+    assert path.read_bytes() == b"abc"
+
+
+def test_preview_of_image_is_browser_sized():
+    data = image_bytes(Image.new("RGB", (4000, 6000), "white"))
+    assert max(files.preview_image(data, "a.png").size) <= 1600
+
+
+def test_preview_of_pdf_first_page():
+    assert files.preview_image(text_pdf(["hello there"]), "a.pdf") is not None
+
+
+def test_preview_of_corrupt_file_is_none():
+    assert files.preview_image(b"junk", "a.png") is None
+    assert files.preview_image(b"junk", "a.pdf") is None

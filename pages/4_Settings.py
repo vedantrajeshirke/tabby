@@ -1,13 +1,13 @@
 import streamlit as st
 
+import ui
 from core import db
 from core.models import Settings
 
-st.set_page_config(page_title="Settings · SnapSpend", page_icon="🧾", layout="wide")
-db.init_db()
+ui.setup_page("Settings")
 st.header("Settings")
 
-conn = db.connect()
+conn = ui.open_db()
 current = db.load_settings(conn)
 
 with st.form("settings"):

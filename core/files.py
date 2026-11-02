@@ -16,6 +16,8 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_PDF_PAGES = 3
 MIN_TEXT_LAYER_CHARS = 20
 PDF_RENDER_DPI = 300
+PREVIEW_MAX_SIZE = (1200, 1600)
+PDF_PREVIEW_DPI = 100
 
 
 class FileRejected(ValueError):
@@ -69,3 +71,24 @@ def load_pdf(file_bytes: bytes) -> PdfContent:
         if alnum_count(text) >= MIN_TEXT_LAYER_CHARS:
             return PdfContent(text=text)
         return PdfContent(text="", page_images=[page.to_image(resolution=PDF_RENDER_DPI).original for page in pages])
+
+
+def preview_image(file_bytes: bytes, filename: str) -> Image.Image | None:
+    """A browser-sized preview: the image, or the first page of a PDF. None if it can't be rendered."""
+    try:
+        if extension(filename) == "pdf":
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                return pdf.pages[0].to_image(resolution=PDF_PREVIEW_DPI).original.copy()
+        image = load_image(file_bytes).convert("RGB")
+        image.thumbnail(PREVIEW_MAX_SIZE)
+        return image
+    except Exception:
+        return None
+
+
+def save_original(file_bytes: bytes, filename: str, directory: Path) -> Path:
+    """Store the original upload as <hash>.<ext>. Called only after the user confirms."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{file_hash(file_bytes)}.{extension(filename)}"
+    path.write_bytes(file_bytes)
+    return path

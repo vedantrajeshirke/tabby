@@ -11,6 +11,7 @@ PAGES = ["app.py", "pages/1_Add_Expense.py", "pages/2_Expenses.py", "pages/3_Das
 def tmp_db(tmp_path, monkeypatch):
     import core.db as db
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "t.db")
+    monkeypatch.setenv("HOSTED_DEMO", "false")
 
 
 @pytest.mark.parametrize("page", PAGES)

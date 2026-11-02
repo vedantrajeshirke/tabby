@@ -402,6 +402,8 @@ def _mark_rescued(extraction: Extraction, min_confidence: float) -> None:
         "but a total line and a date were found"
     )
     for name in extraction.field_confidence:
+        if name == "currency":  # read from a symbol, and the form has no currency field to correct
+            continue
         extraction.field_confidence[name] = "low"
         extraction.field_reason[name] = f"{extraction.field_reason[name]} (low-quality scan, please check)"
 

@@ -52,7 +52,7 @@ The prototype is part of a hiring case study. It **must**:
 ### Out of scope (do NOT build)
 - User accounts / authentication / multi-user
 - Bank connections or bank CSV import (listed as a future step)
-- Cloud database or deployment infrastructure
+- Cloud database (hosting the demo is in scope, see 6.15)
 - Paid AI APIs in the MVP (an AI backend is a stretch goal, section 10)
 - Email inbox parsing, forecasting, ML training, notifications, native mobile app
 - Tax features
@@ -377,6 +377,14 @@ Ranking: `budget_pace` is always pinned first if it fires; the rest are sorted b
 
 ---
 
+### 6.15 Hosted demo (P1)
+The app also runs on Streamlit Community Cloud as a public demo, with the same stack. `packages.txt` installs Tesseract, and dependency versions are pinned.
+- `HOSTED_DEMO=true` gives each browser session its own temporary database and files under `data/sessions/`, because there are no accounts. Session data older than a day is removed.
+- The hosted app says plainly that uploads are processed on a server, that data is temporary, and that real receipts shouldn't be uploaded. The local app keeps the on-device note.
+- Sample receipts for reviewers must contain no personal data, and are generated rather than copied from real receipts.
+
+---
+
 ## 7. Data model (SQLite)
 
 ```sql
@@ -424,9 +432,9 @@ Enable `PRAGMA foreign_keys = ON`. Merchant normalization for matching: uppercas
 ---
 
 ## 8. Privacy and safety
-- Everything runs locally. Files and data stay in `data/` (gitignored); nothing is sent to external services.
+- When run locally, everything stays on the device. Files and data stay in `data/` (gitignored); nothing is sent to external services. The hosted demo processes uploads on its server (see 6.15).
 - Never log raw text or file contents; log errors only.
-- Show a one-line note on the capture page: "Your receipts are processed and stored only on this device."
+- Show a one-line note on the capture page: "Your receipts are processed and stored only on this device." (locally), or the hosted notice from 6.15.
 
 ---
 
@@ -473,10 +481,10 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 | M1 | Skeleton | Project structure, requirements, `.env.example`, DB schema created on startup, multipage app runs with empty pages, settings save and load, Tesseract availability check with a banner | 20 min |
 | M2 | Extraction | `files.py` (image + PDF loading, hashing, PDF text and render), `ocr.py`, `parser.py` with fixture-based tests passing, backend interface with local and mock backends | 75 min |
 | M3 | Validate + categorize + duplicates | `validation.py`, `categorize.py`, `duplicates.py` with unit tests passing | 30 min |
-| M4 | Confirm and save | Confirm screen with an editable form, issues and field reasons shown, extracted-text panel, Save disabled on blocking errors, manual entry, "always use this category" override, saved file | 30 min |
+| M4 | Confirm and save | Confirm screen with an editable form, issues and field reasons shown, extracted-text panel, Save disabled on blocking errors, manual entry, "always use this category" override, saved file, per-session data in hosted mode | 30 min |
 | M5 | Expenses list | Filter by period and category, edit, delete, view file | 15 min |
 | M6 | Dashboard + insights | `periods.py`, all P0 dashboard sections, 4 P0 insight generators with tests, empty states | 45 min |
-| M7 | Synthetic data + polish | Seed script and Settings buttons, synthetic labels/toggle, README with setup and demo scenarios | 15 min |
+| M7 | Synthetic data + polish + hosting | Seed script and Settings buttons, synthetic labels/toggle, generated sample receipts, README with setup and demo scenarios, deployment to Streamlit Community Cloud | 30 min |
 
 If time is running out, cut in this order: monthly trend line → expense list editing. **Never cut:** the confirm step, validation, field confidence/reasons, mock labeling, or invalid-input handling.
 

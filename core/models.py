@@ -10,6 +10,26 @@ class Settings:
 
 
 @dataclass
+class Expense:
+    merchant: str
+    date: str  # YYYY-MM-DD
+    total: float
+    category: str
+    category_source: str  # override | doc_type | rule | default | manual
+    currency: str = "USD"
+    subtotal: float | None = None
+    tax: float | None = None
+    tip: float | None = None
+    payment_method: str | None = None
+    document_type: str | None = None
+    note: str | None = None
+    file_path: str | None = None
+    file_hash: str | None = None
+    extraction_json: str | None = None
+    is_synthetic: int = 0
+
+
+@dataclass
 class LineItem:
     name: str
     quantity: float | None = None

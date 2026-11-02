@@ -1,8 +1,7 @@
 import streamlit as st
 
-from core import db
+import ui
 
-st.set_page_config(page_title="Expenses · SnapSpend", page_icon="🧾", layout="wide")
-db.init_db()
+ui.setup_page("Expenses")
 st.header("Expenses")
 st.info("The expense list arrives in M5.")

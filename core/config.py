@@ -19,6 +19,7 @@ class Config:
     extraction_backend: str
     tesseract_cmd: str
     ocr_min_confidence: float
+    hosted_demo: bool = False
 
 
 def load_config() -> Config:
@@ -28,7 +29,8 @@ def load_config() -> Config:
         min_conf = float(os.getenv("OCR_MIN_CONFIDENCE", "50").split("#")[0].strip())
     except ValueError:
         min_conf = 50.0
-    return Config(backend, cmd, min_conf)
+    hosted = os.getenv("HOSTED_DEMO", "false").split("#")[0].strip().lower() == "true"
+    return Config(backend, cmd, min_conf, hosted)
 
 
 def find_tesseract(cfg: Config | None = None) -> str | None:

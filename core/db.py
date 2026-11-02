@@ -1,10 +1,11 @@
 """SQLite schema and CRUD (stdlib sqlite3, no ORM)."""
 import sqlite3
+from dataclasses import asdict
 from pathlib import Path
 
 from core.categorize import normalize_merchant
 from core.config import DB_PATH
-from core.models import Settings
+from core.models import Expense, Settings
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS expenses (
@@ -119,3 +120,12 @@ def expenses_with_hash(conn: sqlite3.Connection, file_hash: str) -> list[sqlite3
 
 def expenses_on_date(conn: sqlite3.Connection, day: str) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM expenses WHERE date = ? ORDER BY id", (day,)).fetchall()
+
+
+def insert_expense(conn: sqlite3.Connection, expense: Expense) -> int:
+    values = asdict(expense)
+    columns = ", ".join(values)
+    placeholders = ", ".join("?" for _ in values)
+    cursor = conn.execute(f"INSERT INTO expenses ({columns}) VALUES ({placeholders})", tuple(values.values()))
+    conn.commit()
+    return cursor.lastrowid

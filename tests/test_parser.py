@@ -151,7 +151,7 @@ def test_low_confidence_with_total_and_date_is_rescued_as_low():
     e = parse((FIXTURES / "grocery.txt").read_text(), text_confidence=30.0, min_confidence=50.0, merchant_keywords=KEYWORDS)
     assert e.document_type == "receipt"
     assert e.total == 11.53
-    assert set(e.field_confidence.values()) == {"low"}
+    assert {v for k, v in e.field_confidence.items() if k != "currency"} == {"low"}
     assert "please check" in e.field_reason["total"]
     assert "below 50" in e.field_reason["document_type"]
 
