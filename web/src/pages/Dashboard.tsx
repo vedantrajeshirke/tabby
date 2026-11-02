@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { ApiError, getDashboard, type Dashboard as Data } from "../api";
 import { CategorySplit, PeriodComparison, SpendingTrend } from "../components/charts";
 import { formatDate, formatMoney, localToday } from "../format";
@@ -41,7 +41,7 @@ function BudgetPace({ data }: { data: Data }) {
 
   return (
     <section className="rounded-2xl border border-line p-5 md:p-6">
-      <p className="text-sm text-muted">Spent this period</p>
+      <p className="text-sm text-muted">{period.is_current ? "Spent this period" : `Spent in ${period.label}`}</p>
       <p className="amount mt-1 text-5xl font-semibold">
         {formatMoney(data.spent)}
         {budget && <span className="text-lg font-normal text-muted"> of {formatMoney(budget.budget)}</span>}
@@ -69,7 +69,7 @@ function BudgetPace({ data }: { data: Data }) {
           </p>
         </>
       ) : (
-        <p className="mt-4 rounded-xl bg-mint p-3 text-sm text-pine">
+        period.is_current && <p className="mt-4 rounded-xl bg-mint p-3 text-sm text-pine">
           <Link to="/settings" className="font-medium underline">Set a monthly budget in Settings</Link> to see your pace and a safe daily amount.
         </p>
       )}
@@ -77,7 +77,7 @@ function BudgetPace({ data }: { data: Data }) {
       <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-line pt-4 sm:grid-cols-3">
         {budget && <Stat label="Safe to spend per day" value={formatMoney(budget.safe_per_day)} tone={over ? "text-expense" : ""} />}
         <Stat label="Average per day" value={formatMoney(data.average_daily)} />
-        <Stat label="Left in this period" value={dayLabel} />
+        {period.is_current ? <Stat label="Left in this period" value={dayLabel} /> : <Stat label="Expenses" value={String(data.expense_count)} />}
       </dl>
     </section>
   );
@@ -132,32 +132,49 @@ export default function Dashboard() {
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [hideSynthetic, setHideSynthetic] = useState(false);
+  const [params, setParams] = useSearchParams();
+  const requestedPeriod = params.get("period") ?? "";
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     setError("");
-    getDashboard(localToday(), hideSynthetic, controller.signal)
+    getDashboard(localToday(), hideSynthetic, requestedPeriod, controller.signal)
       .then(setData)
       .catch((e) => {
         if (controller.signal.aborted) return;
         setError(e instanceof ApiError ? e.message : "Couldn't load your dashboard. Please try again.");
       });
     return () => controller.abort();
-  }, [hideSynthetic, attempt]);
+  }, [hideSynthetic, requestedPeriod, attempt]);
 
   const heading = (
     <div className="flex flex-wrap items-end justify-between gap-3">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight text-pine">Dashboard</h1>
-        {data && <p className="mt-1 text-muted">{data.period.label}</p>}
+      <h1 className="text-3xl font-semibold tracking-tight text-pine">Dashboard</h1>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {data?.any_synthetic && (
+          <label className="flex items-center gap-2 text-sm text-pine">
+            <input type="checkbox" checked={hideSynthetic} onChange={(e) => setHideSynthetic(e.target.checked)} className="size-4 accent-forest" />
+            Hide synthetic data
+          </label>
+        )}
+        {data && (
+          <label className="flex items-center gap-2 text-sm font-medium text-pine">
+            Period
+            <select
+              value={data.period.start}
+              onChange={(e) => {
+                const choice = data.trend.history.find((p) => p.start === e.target.value);
+                setParams(choice?.in_progress ? {} : { period: e.target.value }, { replace: true });
+              }}
+              className="rounded-xl border border-line bg-white px-3 py-2 text-sm font-normal focus:border-forest"
+            >
+              {!data.trend.history.some((p) => p.start === data.period.start) && <option value={data.period.start}>{data.period.label}</option>}
+              {data.trend.history.map((p) => <option key={p.start} value={p.start}>{p.full_label}</option>)}
+            </select>
+          </label>
+        )}
       </div>
-      {data?.any_synthetic && (
-        <label className="flex items-center gap-2 text-sm text-pine">
-          <input type="checkbox" checked={hideSynthetic} onChange={(e) => setHideSynthetic(e.target.checked)} className="size-4 accent-forest" />
-          Hide synthetic data
-        </label>
-      )}
     </div>
   );
 
@@ -174,7 +191,19 @@ export default function Dashboard() {
   }
   if (!data) return <section>{heading}<p role="status" className="mt-6 text-muted">Loading your dashboard…</p></section>;
 
-  if (data.expense_count < MIN_EXPENSES) {
+  if (!data.period.is_current && data.expense_count === 0) {
+    return (
+      <section className="space-y-6">
+        {heading}
+        <div className="rounded-2xl border border-line p-10 text-center">
+          <p className="font-medium text-pine">No expenses in {data.period.label}</p>
+          <p className="mt-1 text-sm text-muted">Choose another period above.</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (data.period.is_current && data.expense_count < MIN_EXPENSES) {
     const left = MIN_EXPENSES - data.expense_count;
     return (
       <section className="space-y-6">
@@ -196,7 +225,7 @@ export default function Dashboard() {
     <section className="space-y-4">
       <div className="pb-2">{heading}</div>
       <BudgetPace data={data} />
-      <Insights data={data} />
+      {data.period.is_current && <Insights data={data} />}
       <Card title="Where it went" synthetic={data.categories.includes_synthetic}>
         <CategorySplit rows={data.categories.rows} />
       </Card>
@@ -206,8 +235,8 @@ export default function Dashboard() {
         </Card>
       )}
       <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Spending over time" synthetic={data.trend.includes_synthetic}>
-          <SpendingTrend points={data.trend.points} />
+        <Card title="Spending over time" note="Last 6 periods" synthetic={data.trend.includes_synthetic}>
+          <SpendingTrend points={data.trend.points} history={data.trend.history} />
         </Card>
         <Card title="Top expenses" synthetic={data.top.includes_synthetic}>
           <TopExpenses rows={data.top.rows} />

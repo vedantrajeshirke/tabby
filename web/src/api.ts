@@ -71,7 +71,7 @@ export type ExpenseDetail = SavedExpense & { extraction: Extraction | null };
 export type Period = { start: string; end: string; label: string };
 
 export type Dashboard = {
-  period: { start: string; end: string; label: string; days_elapsed: number; days_left: number; length: number };
+  period: { start: string; end: string; label: string; days_elapsed: number; days_left: number; length: number; is_current: boolean };
   expense_count: number;
   any_synthetic: boolean;
   spent: number;
@@ -87,6 +87,7 @@ export type Dashboard = {
   } | null;
   trend: {
     points: { label: string; full_label: string; total: number; count: number; in_progress: boolean }[];
+    history: { start: string; full_label: string; total: number; count: number; in_progress: boolean }[];
     includes_synthetic: boolean;
   };
   top: {
@@ -209,8 +210,10 @@ export function deleteExpense(id: number): Promise<void> {
   return request(`/expenses/${id}`, { method: "DELETE" });
 }
 
-export function getDashboard(clientToday: string, hideSynthetic: boolean, signal: AbortSignal): Promise<Dashboard> {
-  return request(`/dashboard?client_today=${clientToday}&hide_synthetic=${hideSynthetic}`, { signal });
+export function getDashboard(clientToday: string, hideSynthetic: boolean, period: string, signal: AbortSignal): Promise<Dashboard> {
+  const query = new URLSearchParams({ client_today: clientToday, hide_synthetic: String(hideSynthetic) });
+  if (period) query.set("period", period);
+  return request(`/dashboard?${query}`, { signal });
 }
 
 export type UserSettings = { name: string; monthly_budget: number | null; cycle_start_day: number };

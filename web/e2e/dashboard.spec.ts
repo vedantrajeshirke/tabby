@@ -10,7 +10,7 @@ function today() {
 }
 
 const SAMPLE = {
-  period: { start: "2026-11-01", end: "2026-11-30", label: "November 2026", days_elapsed: 14, days_left: 16, length: 30 },
+  period: { start: "2026-11-01", end: "2026-11-30", label: "November 2026", days_elapsed: 14, days_left: 16, length: 30, is_current: true },
   expense_count: 6,
   any_synthetic: true,
   spent: 620,
@@ -35,6 +35,12 @@ const SAMPLE = {
       { label: "Sep", full_label: "September 2026", total: 480, count: 4, in_progress: false },
       { label: "Oct", full_label: "October 2026", total: 550, count: 4, in_progress: false },
       { label: "Nov", full_label: "November 2026", total: 620, count: 6, in_progress: true },
+    ],
+    history: [
+      { start: "2026-11-01", full_label: "November 2026", total: 620, count: 6, in_progress: true },
+      { start: "2026-10-01", full_label: "October 2026", total: 550, count: 4, in_progress: false },
+      { start: "2026-09-01", full_label: "September 2026", total: 480, count: 4, in_progress: false },
+      { start: "2025-03-01", full_label: "March 2025", total: 40, count: 1, in_progress: false },
     ],
     includes_synthetic: false,
   },
@@ -65,6 +71,30 @@ test("saved expenses reach the real dashboard", async ({ page, request }) => {
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
+test("a past period can be opened, even with one expense, without budget or insights", async ({ page, request }) => {
+  await page.goto("/");
+  const old = new Date();
+  old.setFullYear(old.getFullYear() - 1, old.getMonth() - 2, 10);
+  const day = `${old.getFullYear()}-${pad(old.getMonth() + 1)}-10`;
+  const merchant = `Old Shop ${test.info().project.name} ${Date.now()}`;
+  const saved = await request.post("/api/expenses", { data: { merchant, date: day, total: 77.5, client_today: today() } });
+  expect(saved.status()).toBe(201);
+
+  await goToDashboard(page);
+  const label = old.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  await page.getByRole("combobox", { name: "Period" }).selectOption({ label });
+  await expect(page.getByText(`Spent in ${label}`)).toBeVisible();
+  await expect(page.getByRole("link", { name: new RegExp(merchant) })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Insights" })).toHaveCount(0);
+  await expect(page.getByText("Safe to spend per day")).toHaveCount(0);
+
+  await page.reload(); // the choice lives in the address
+  await expect(page.getByText(`Spent in ${label}`)).toBeVisible();
+
+  await page.getByText("View all periods as a table").first().click();
+  await expect(page.getByRole("rowheader", { name: label })).toBeVisible();
+});
+
 test("fewer than three expenses shows a friendly message instead of empty charts", async ({ page }) => {
   await page.route("**/api/dashboard**", (route) => route.fulfill({ json: { ...SAMPLE, expense_count: 2 } }));
   await goToDashboard(page);
@@ -87,8 +117,9 @@ test("over budget, insights, comparison and labels all show", async ({ page }) =
   await page.locator('rect[aria-label^="October 2026"]').focus();
   await expect(page.getByRole("status").filter({ hasText: "October 2026" })).toContainText("$550.00");
 
-  await page.getByText("View as table").click();
-  await expect(page.getByRole("rowheader", { name: /2026/ })).toHaveText(["November 2026 (so far)", "October 2026", "September 2026"]); // newest first
+  await page.getByText("View all periods as a table").click();
+
+  await expect(page.getByRole("rowheader", { name: /20[0-9][0-9]/ })).toHaveText(["November 2026 (so far)", "October 2026", "September 2026", "March 2025"]); // newest first, beyond the chart's 6
 });
 
 test("without a budget it points to Settings", async ({ page }) => {

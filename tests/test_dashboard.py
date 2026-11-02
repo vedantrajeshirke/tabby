@@ -119,3 +119,52 @@ def test_real_only_data_isnt_labeled_synthetic():
 def test_insights_message_threshold(count, shows_message):
     result = build([row("2026-11-02", 1) for _ in range(count)])
     assert bool(result["insights_message"]) is shows_message
+
+
+# Past periods
+
+
+def test_a_past_period_is_seen_as_finished():
+    rows = [row("2025-03-10", 62, "Food"), row("2025-02-20", 31, "Food"), row("2026-11-02", 500)]
+    result = build(rows, Settings("Sam", 800), period_day=date(2025, 3, 25))
+    assert result["period"]["label"] == "March 2025"
+    assert result["period"]["is_current"] is False
+    assert (result["spent"], result["expense_count"], result["average_daily"]) == (62, 1, 2)
+    assert result["period"]["days_left"] == 0
+    assert result["budget"] is None
+    assert result["insights"] == [] and result["insights_message"] is None
+    assert result["comparison"]["label"] == "Mar 1–31 vs Feb 1–28"
+    assert result["comparison"]["rows"][0]["previous"] == 31
+
+
+def test_choosing_the_current_or_a_future_period_gives_the_current_one():
+    budgeted = Settings(monthly_budget=800)
+    assert build([], budgeted, period_day=date(2026, 11, 2))["period"]["is_current"] is True
+    future = build([], budgeted, period_day=date(2030, 1, 1))
+    assert future["period"]["label"] == "November 2026" and future["budget"] is not None
+
+
+def test_past_periods_follow_a_custom_cycle():
+    result = build([row("2025-03-20", 10)], Settings(cycle_start_day=15), period_day=date(2025, 3, 20))
+    assert (result["period"]["start"], result["period"]["end"], result["spent"]) == ("2025-03-15", "2025-04-14", 10)
+
+
+def test_history_lists_only_periods_with_expenses_plus_the_current_one_newest_first():
+    rows = [row("2024-01-05", 5), row("2025-03-10", 10), row("2025-03-11", 20)]
+    history = build(rows)["trend"]["history"]
+    assert [(p["full_label"], p["total"], p["count"], p["in_progress"]) for p in history] == [
+        ("November 2026", 0, 0, True), ("March 2025", 30, 2, False), ("January 2024", 5, 1, False),
+    ]
+
+
+def test_the_chart_stays_at_six_periods_while_history_goes_further():
+    rows = [row(f"202{y}-03-05", 10) for y in (3, 4, 5)] + [row(f"2026-{m:02}-05", 10) for m in range(1, 12)]
+    trend = build(rows)["trend"]
+    assert len(trend["points"]) == 6
+    assert len(trend["history"]) == 14
+
+
+def test_hidden_synthetic_rows_leave_history_too():
+    rows = [row("2025-03-10", 10, synthetic=True)]
+    assert len(build(rows)["trend"]["history"]) == 2
+    assert len(build(rows, hide_synthetic=True)["trend"]["history"]) == 1

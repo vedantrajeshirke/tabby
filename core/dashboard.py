@@ -81,18 +81,36 @@ def _trend(df: pd.DataFrame, today: date, cycle_start_day: int) -> dict:
             "in_progress": today <= end,
         })
     first = next((i for i, point in enumerate(points) if point["count"]), len(points) - 1)  # before any data isn't $0 spent
-    return {"points": points[first:], "includes_synthetic": _has_synthetic(_between(df, *fetch_range(today, cycle_start_day)))}
+    return {"points": points[first:], "history": _history(df, today, cycle_start_day), "includes_synthetic": _has_synthetic(df)}
 
 
-def fetch_range(today: date, cycle_start_day: int) -> tuple[date, date]:
-    """Every date the dashboard looks at."""
-    found = periods.recent_periods(today, cycle_start_day, TREND_PERIODS)
-    return date.fromisoformat(found[-1]["start"]), date.fromisoformat(found[0]["end"])
+def _history(df: pd.DataFrame, today: date, cycle_start_day: int) -> list[dict]:
+    """The current period and every earlier one with expenses, newest first."""
+    current_start, current_end = periods.current_period(today, cycle_start_day)
+    starts = {current_start}
+    for day in df["date"].unique():
+        starts.add(periods.current_period(min(date.fromisoformat(day), today), cycle_start_day)[0])
+    found = []
+    for start in sorted(starts, reverse=True):
+        start, end = periods.current_period(start, cycle_start_day)
+        rows = _between(df, start, end)
+        found.append({
+            "start": start.isoformat(),
+            "full_label": periods.period_label(start, end),
+            "total": round(float(rows["total"].sum()), 2),
+            "count": len(rows),
+            "in_progress": start == current_start,
+        })
+    return found
 
 
-def build(rows: list[dict], settings: Settings, today: date, hide_synthetic: bool = False) -> dict:
+def build(rows: list[dict], settings: Settings, today: date, hide_synthetic: bool = False, period_day: date | None = None) -> dict:
+    """Numbers for the period containing `period_day`, or the current one. A past period is seen as finished."""
     everything = pd.DataFrame(rows, columns=COLUMNS).astype({"total": "float64", "is_synthetic": "bool"})
-    start, end = periods.current_period(today, settings.cycle_start_day)
+    current_start, _ = periods.current_period(today, settings.cycle_start_day)
+    start, end = periods.current_period(min(period_day or today, today), settings.cycle_start_day)
+    is_current = start == current_start
+    as_of = today if is_current else end
     any_synthetic = _has_synthetic(everything)
 
     df = everything
@@ -101,12 +119,13 @@ def build(rows: list[dict], settings: Settings, today: date, hide_synthetic: boo
 
     current = _between(df, start, end)
     spent = round(float(current["total"].sum()), 2)
-    elapsed = periods.days_elapsed(today, start, end)
-    previous_start, previous_end = periods.previous_period(today, settings.cycle_start_day)
+    elapsed = periods.days_elapsed(as_of, start, end)
+    previous_start, previous_end = periods.previous_period(as_of, settings.cycle_start_day)
     fair_end = min(previous_start + timedelta(days=elapsed - 1), previous_end)  # Nov 1–14 against Oct 1–14
     fair_previous = _between(df, previous_start, fair_end)
     top = current.sort_values(["total", "id"], ascending=False).head(TOP_EXPENSES)
-    found = insights.generate(current, fair_previous, settings, insights.Window(today, start, end))
+    # Budgets aren't stored per period, and insights talk about the period still under way.
+    found = insights.generate(current, fair_previous, settings, insights.Window(today, start, end)) if is_current else []
 
     return {
         "period": {
@@ -114,18 +133,19 @@ def build(rows: list[dict], settings: Settings, today: date, hide_synthetic: boo
             "end": end.isoformat(),
             "label": periods.period_label(start, end),
             "days_elapsed": elapsed,
-            "days_left": periods.days_left(today, end),
+            "days_left": periods.days_left(as_of, end),
+            "is_current": is_current,
             "length": periods.period_length(start, end),
         },
         "expense_count": len(current),
         "any_synthetic": any_synthetic,
         "spent": spent,
         "average_daily": round(spent / elapsed, 2),
-        "budget": _budget(spent, settings, today, end),
+        "budget": _budget(spent, settings, today, end) if is_current else None,
         "insights": [asdict(insight) for insight in found],
-        "insights_message": insights.NOT_ENOUGH if len(current) < insights.MIN_EXPENSES else None,
+        "insights_message": insights.NOT_ENOUGH if is_current and len(current) < insights.MIN_EXPENSES else None,
         "categories": {"rows": _categories(current, spent) if spent else [], "includes_synthetic": _has_synthetic(current)},
-        "comparison": _comparison(current, fair_previous, today, start, previous_start, fair_end),
+        "comparison": _comparison(current, fair_previous, as_of, start, previous_start, fair_end),
         "trend": _trend(df, today, settings.cycle_start_day),
         "top": {
             "rows": [

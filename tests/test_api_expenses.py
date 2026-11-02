@@ -462,3 +462,15 @@ def test_dashboard_doesnt_expose_owner_or_file_details(api):
     text = api.get(f"/api/dashboard?client_today={today}").text
     assert "a" * 64 not in text
     assert "user_id" not in text and USER_A not in text
+
+
+def test_dashboard_opens_a_past_period_for_this_user_only(api):
+    assert post_expense(api, date="2025-03-10", total=44.0, merchant="Old").status_code == 201
+    assert api.get("/api/dashboard?period=2025-03-01").json()["spent"] == 44
+    assert api.get("/api/dashboard").json()["trend"]["history"][-1]["total"] == 44
+    assert api.get("/api/dashboard?period=not-a-date").status_code == 422
+
+    api.state["user"] = USER_B
+    other = api.get("/api/dashboard?period=2025-03-01").json()
+    assert other["spent"] == 0
+    assert len(other["trend"]["history"]) == 1

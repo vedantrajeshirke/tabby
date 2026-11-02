@@ -113,7 +113,7 @@ function niceMax(value: number) {
 const HEIGHT = 200;
 const PAD = { top: 16, right: 16, bottom: 26, left: 48 };
 
-export function SpendingTrend({ points }: { points: Dashboard["trend"]["points"] }) {
+export function SpendingTrend({ points, history }: { points: Dashboard["trend"]["points"]; history: Dashboard["trend"]["history"] }) {
   const [ref, width] = useWidth();
   const [active, setActive] = useState<number | null>(null);
   const top = niceMax(Math.max(...points.map((point) => point.total)));
@@ -180,11 +180,11 @@ export function SpendingTrend({ points }: { points: Dashboard["trend"]["points"]
         {points.length === 1 ? "Your trend builds up as you add expenses from more periods." : ""}
       </p>
       <details className="mt-2 text-xs">
-        <summary className="cursor-pointer font-medium text-forest">View as table</summary>
+        <summary className="cursor-pointer font-medium text-forest">View all periods as a table</summary>
         <table className="mt-2 w-full">
           <tbody>
-            {[...points].reverse().map((point) => (
-              <tr key={point.full_label} className="border-t border-line">
+            {history.map((point) => (
+              <tr key={point.start} className="border-t border-line">
                 <th scope="row" className="py-1.5 text-left font-normal text-muted">{point.full_label}{point.in_progress ? " (so far)" : ""}</th>
                 <td className="amount py-1.5 text-right font-medium">{formatMoney(point.total)}</td>
               </tr>
