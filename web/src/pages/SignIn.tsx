@@ -86,7 +86,7 @@ export default function SignIn({ client, recovering, onRecovered }: {
   return (
     <div className="grid min-h-dvh lg:grid-cols-2">
       <aside className="hidden flex-col justify-between bg-pine p-12 text-white lg:flex">
-        <p className="text-lg font-semibold tracking-tight">SnapSpend</p>
+        <p className="text-lg font-semibold tracking-tight">Tabby</p>
         <div>
           <p className="max-w-md text-4xl font-semibold tracking-tight">Snap a receipt. Check it. Know where your money went.</p>
           <p className="mt-4 max-w-md text-white/75">
@@ -98,7 +98,7 @@ export default function SignIn({ client, recovering, onRecovered }: {
 
       <main className="flex items-center justify-center px-4 py-10">
         <div className="w-full max-w-sm">
-          <p className="mb-8 text-lg font-semibold tracking-tight text-pine lg:hidden">SnapSpend</p>
+          <p className="mb-8 text-lg font-semibold tracking-tight text-pine lg:hidden">Tabby</p>
           <h1 className="text-3xl font-semibold tracking-tight text-pine">{TITLES[mode].title}</h1>
 
           {error && <p role="alert" className="mt-4 rounded-xl bg-expense-soft p-3 text-sm text-expense">{error}</p>}

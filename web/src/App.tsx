@@ -46,9 +46,9 @@ function Logo() {
   return (
     <p className="flex items-center gap-2.5 text-lg font-semibold tracking-tight">
       <span aria-hidden="true" className="grid size-7 place-items-center rounded-lg bg-mint text-sm font-bold text-pine">
-        S
+        T
       </span>
-      SnapSpend
+      Tabby
     </p>
   );
 }
@@ -91,7 +91,7 @@ export default function App() {
     return () => data.subscription.unsubscribe();
   }, []);
 
-  if (apiError) return <Notice>Can't reach the SnapSpend API. Check that it's running, then refresh this page.</Notice>;
+  if (apiError) return <Notice>Can't reach the Tabby API. Check that it's running, then refresh this page.</Notice>;
   if (!status) return null;
 
   if (status.auth_mode === "local") return <Shell status={status} />;

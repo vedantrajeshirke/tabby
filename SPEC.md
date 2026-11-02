@@ -1,6 +1,6 @@
-# SnapSpend — Project Spec
+# Tabby — Project Spec
 
-> **Working name:** SnapSpend
+> **Working name:** Tabby
 > **Type:** Personal expense tracker (case-study prototype)
 > **Receipts:** images are read and then discarded. Only the expense details, masked extracted text and a file hash are kept.
 > **Stack:** React + FastAPI + Postgres, with Supabase for hosted accounts

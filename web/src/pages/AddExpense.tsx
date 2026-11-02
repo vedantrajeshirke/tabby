@@ -188,7 +188,7 @@ export default function AddExpense({ localMode }: { localMode: boolean }) {
         <>
           <button
             onClick={() => setStage({ name: "confirm", upload: null })}
-            className="mt-3 w-full rounded-xl border border-line px-4 py-3 font-medium text-pine transition-colors hover:bg-mint"
+            className="mt-3 w-full rounded-xl border border-sage bg-mint px-4 py-3 font-medium text-pine transition-colors hover:bg-sage active:bg-sage"
           >
             Enter manually instead
           </button>
@@ -241,7 +241,7 @@ function Unusable({ extraction, message, onRetry, onManual }: {
         <button onClick={onRetry} className="rounded-xl bg-forest px-4 py-3 font-medium text-white transition-colors hover:bg-pine">
           Upload a clearer photo
         </button>
-        <button onClick={onManual} className="rounded-xl border border-line px-4 py-3 font-medium text-pine transition-colors hover:bg-mint">
+        <button onClick={onManual} className="rounded-xl border border-sage bg-mint px-4 py-3 font-medium text-pine transition-colors hover:bg-sage active:bg-sage">
           Enter manually
         </button>
       </div>

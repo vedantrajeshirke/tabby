@@ -4,7 +4,7 @@
 set -eu
 cd "$(dirname "$0")/../.."
 export EXTRACTION_BACKEND=mock AUTH_MODE=local WEB_PORT=5183 API_PORT=8010 DB_PORT=5443
-COMPOSE="docker compose -p snapspend-e2e --env-file /dev/null"
+COMPOSE="docker compose -p tabby-e2e --env-file /dev/null"
 
 trap '$COMPOSE down -v >/dev/null 2>&1' EXIT
 $COMPOSE up --build -d >/dev/null 2>&1

@@ -108,7 +108,7 @@ export class ApiError extends Error {
 
 export const LIST_LIMIT = 1000;
 const BASE = import.meta.env.VITE_API_URL ?? "";
-const CONNECTION_PROBLEM = "Can't reach SnapSpend. Check your connection and try again.";
+const CONNECTION_PROBLEM = "Can't reach Tabby. Check your connection and try again.";
 
 let getToken: () => Promise<string | null> = async () => null;
 let onSignedOut: () => void = () => {};

@@ -1,6 +1,6 @@
-# SnapSpend
+# Tabby
 
-SnapSpend is a personal expense tracker for students. Upload a receipt, PDF or payment screenshot, check the details it read, and save it. The dashboard then shows your budget pace, where the money went, and plain-language insights. Nothing is saved until you confirm it, and the file itself is never stored.
+Tabby is a personal expense tracker for students. Upload a receipt, PDF or payment screenshot, check the details it read, and save it. The dashboard then shows your budget pace, where the money went, and plain-language insights. Nothing is saved until you confirm it, and the file itself is never stored.
 
 **Hosted app:** _link added after deployment_
 

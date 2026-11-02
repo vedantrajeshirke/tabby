@@ -23,7 +23,7 @@ async def lifespan(_: FastAPI):
 
 
 # Interactive API docs are off, since the hosted API is public.
-app = FastAPI(title="SnapSpend API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
+app = FastAPI(title="Tabby API", lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 
 origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split("#")[0].split(",") if o.strip()]
 if origins:
