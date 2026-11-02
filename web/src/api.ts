@@ -71,6 +71,32 @@ export type SavedExpense = {
 export type ExpenseDetail = SavedExpense & { extraction: Extraction | null };
 export type Period = { start: string; end: string; label: string };
 
+export type Dashboard = {
+  period: { start: string; end: string; label: string; days_elapsed: number; days_left: number; length: number };
+  expense_count: number;
+  other_currency_count: number;
+  any_synthetic: boolean;
+  spent: number;
+  average_daily: number;
+  budget: { budget: number; spent: number; remaining: number; over: number; safe_per_day: number } | null;
+  insights: { type: string; text: string; score: number; tone: "neutral" | "warning" | "positive" }[];
+  insights_message: string | null;
+  categories: { rows: { category: string; total: number; share: number }[]; includes_synthetic: boolean };
+  comparison: {
+    label: string;
+    rows: { category: string; current: number; previous: number; change: number; change_ratio: number | null }[];
+    includes_synthetic: boolean;
+  } | null;
+  trend: {
+    points: { label: string; full_label: string; total: number; count: number; in_progress: boolean }[];
+    includes_synthetic: boolean;
+  };
+  top: {
+    rows: { id: number; merchant: string; date: string; category: string; total: number; is_synthetic: boolean }[];
+    includes_synthetic: boolean;
+  };
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
@@ -183,4 +209,8 @@ export function updateExpense(id: number, body: ExpenseBody): Promise<{ expense:
 
 export function deleteExpense(id: number): Promise<void> {
   return request(`/expenses/${id}`, { method: "DELETE" });
+}
+
+export function getDashboard(clientToday: string, hideSynthetic: boolean, signal: AbortSignal): Promise<Dashboard> {
+  return request(`/dashboard?client_today=${clientToday}&hide_synthetic=${hideSynthetic}`, { signal });
 }

@@ -69,7 +69,7 @@ The prototype is part of a hiring case study. It **must**:
 
 | Concern | Choice | Notes |
 |---|---|---|
-| Front end | React, TypeScript, Vite, Tailwind | Phone-first. Charts with Plotly (`react-plotly.js`) |
+| Front end | React, TypeScript, Vite, Tailwind | Phone-first. Charts are hand-built with SVG and HTML: Plotly would add megabytes to the app and is hard to fit to the design |
 | Back end | Python 3.11+, FastAPI | Thin routes that call `core/` |
 | Database | Postgres via `psycopg` | Plain SQL, no ORM. Supabase hosted, Docker locally |
 | Accounts | Supabase Auth (Google and email/password) | Issues JWTs; the API verifies them |

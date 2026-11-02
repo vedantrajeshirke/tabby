@@ -4,6 +4,7 @@ import { NavLink, Route, Routes, useLocation } from "react-router";
 import { getStatus, setAuthHandlers, type Status } from "./api";
 import NamePrompt from "./components/NamePrompt";
 import AddExpense from "./pages/AddExpense";
+import Dashboard from "./pages/Dashboard";
 import ExpenseDetailPage from "./pages/ExpenseDetail";
 import Expenses from "./pages/Expenses";
 import SignIn from "./pages/SignIn";
@@ -19,7 +20,7 @@ const ICONS = {
 const PAGES = [
   { path: "/", label: "Add", icon: ICONS.add, title: "Add Expense", next: "" },
   { path: "/expenses", label: "Expenses", icon: ICONS.expenses, title: "Expenses", next: "" },
-  { path: "/dashboard", label: "Dashboard", icon: ICONS.dashboard, title: "Dashboard", next: "Charts and insights arrive in M10." },
+  { path: "/dashboard", label: "Dashboard", icon: ICONS.dashboard, title: "Dashboard", next: "" },
   { path: "/settings", label: "Settings", icon: ICONS.settings, title: "Settings", next: "Settings arrive in M11." },
 ];
 
@@ -190,7 +191,8 @@ function Shell({ status, name, email, onSignOut }: { status: Status; name?: stri
             <Route path="/" element={null} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/expenses/:id" element={<ExpenseDetailPage />} />
-            {PAGES.slice(2).map((page) => (
+            <Route path="/dashboard" element={<Dashboard />} />
+            {PAGES.slice(3).map((page) => (
               <Route key={page.path} path={page.path} element={<Placeholder title={page.title} next={page.next} />} />
             ))}
           </Routes>

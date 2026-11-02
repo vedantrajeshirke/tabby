@@ -436,3 +436,29 @@ def test_periods_follow_the_users_cycle(api):
 
     state["user"] = USER_B  # another user's settings don't apply
     assert date.fromisoformat(client.get("/api/periods").json()[0]["start"]).day == 1
+
+
+def test_dashboard_counts_only_this_users_expenses(api):
+    today = datetime.now(timezone.utc).date().isoformat()
+    assert post_expense(api, date=today, total=30.0, merchant="Mine", client_today=today).status_code == 201
+    assert api.get(f"/api/dashboard?client_today={today}").json()["spent"] == 30
+
+    api.state["user"] = USER_B
+    other = api.get(f"/api/dashboard?client_today={today}").json()
+    assert other["spent"] == 0
+    assert other["top"]["rows"] == []
+
+
+def test_dashboard_uses_the_users_budget_and_cycle(api):
+    assert api.put("/api/settings", json={"name": "Sam", "monthly_budget": 500, "cycle_start_day": 15}).status_code == 200
+    result = api.get("/api/dashboard").json()
+    assert result["budget"]["budget"] == 500
+    assert date.fromisoformat(result["period"]["start"]).day == 15
+
+
+def test_dashboard_doesnt_expose_owner_or_file_details(api):
+    today = datetime.now(timezone.utc).date().isoformat()
+    post_expense(api, date=today, client_today=today, file_hash="a" * 64)
+    text = api.get(f"/api/dashboard?client_today={today}").text
+    assert "a" * 64 not in text
+    assert "user_id" not in text and USER_A not in text
