@@ -18,12 +18,6 @@ export function SyntheticTag() {
   return <span className="inline-block rounded-full border border-line px-2 py-0.5 text-xs font-medium text-muted">Synthetic</span>;
 }
 
-function totalsByCurrency(expenses: SavedExpense[]) {
-  const totals = new Map<string, number>();
-  for (const expense of expenses) totals.set(expense.currency, (totals.get(expense.currency) ?? 0) + expense.total);
-  return [...totals.entries()].sort(([a], [b]) => (a === "USD" ? -1 : b === "USD" ? 1 : a.localeCompare(b)));
-}
-
 export default function Expenses() {
   const [params, setParams] = useSearchParams();
   const { search } = useLocation();
@@ -127,11 +121,7 @@ export default function Expenses() {
       {!error && expenses && expenses.length > 0 && (
         <>
           <div className="mt-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 border-b border-line pb-4">
-            <div className="flex flex-wrap gap-x-6">
-              {totalsByCurrency(expenses).map(([currency, total]) => (
-                <p key={currency} className="amount text-3xl font-semibold">{formatMoney(total, currency)}</p>
-              ))}
-            </div>
+            <p className="amount text-3xl font-semibold">{formatMoney(expenses.reduce((sum, expense) => sum + expense.total, 0))}</p>
             <p className="text-sm text-muted">
               {expenses.length} {expenses.length === 1 ? "expense" : "expenses"}
             </p>
@@ -167,7 +157,7 @@ export default function Expenses() {
                   </td>
                   <td className="py-3.5 pr-4"><CategoryTag name={expense.category} /></td>
                   <td className="py-3.5 pr-4 text-muted">{paymentLabel(expense.payment_method)}</td>
-                  <td className="amount py-3.5 text-right font-semibold whitespace-nowrap">{formatMoney(expense.total, expense.currency)}</td>
+                  <td className="amount py-3.5 text-right font-semibold whitespace-nowrap">{formatMoney(expense.total)}</td>
                 </tr>
               ))}
             </tbody>
@@ -185,7 +175,7 @@ export default function Expenses() {
                       {expense.is_synthetic && <SyntheticTag />}
                     </span>
                   </span>
-                  <span className="amount shrink-0 font-semibold">{formatMoney(expense.total, expense.currency)}</span>
+                  <span className="amount shrink-0 font-semibold">{formatMoney(expense.total)}</span>
                 </Link>
               </li>
             ))}

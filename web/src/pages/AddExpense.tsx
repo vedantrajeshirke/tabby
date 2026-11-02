@@ -118,7 +118,7 @@ export default function AddExpense({ localMode }: { localMode: boolean }) {
           <h1 className="mt-4 text-2xl font-semibold tracking-tight text-pine">Expense saved</h1>
         </div>
         <div className="mt-6 rounded-2xl border border-line p-6">
-          <p className="amount text-4xl font-semibold">{formatMoney(expense.total, expense.currency)}</p>
+          <p className="amount text-4xl font-semibold">{formatMoney(expense.total)}</p>
           <p className="mt-2 font-medium text-pine">{expense.merchant}</p>
           <p className="mt-1 text-sm text-muted">{expense.date} · {expense.category}</p>
         </div>

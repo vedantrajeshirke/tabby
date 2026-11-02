@@ -194,15 +194,11 @@ def test_find_amounts(text, expected):
     assert [(a.value, a.negative) for a in find_amounts(text)] == expected
 
 
-@pytest.mark.parametrize(
-    "marker, expected, confidence",
-    [("€5.00", "EUR", "high"), ("£5.00", "GBP", "high"), ("₹5.00", "INR", "high"), ("CA$5.00", "CAD", "high"),
-     ("$5.00", "USD", "high"), ("5.00", "USD", "medium")],
-)
-def test_currency(marker, expected, confidence):
-    e = parse(f"Some Shop Name Here\nWidget {marker}\nTOTAL {marker}")
-    assert e.currency == expected
-    assert e.field_confidence["currency"] == confidence
+@pytest.mark.parametrize("marker", ["€5.00", "£5.00", "₹5.00", "CA$5.00", "$5.00", "5.00"])
+def test_every_amount_is_usd_whatever_symbol_is_read(marker):
+    e = parse(f"Some Shop Name Here\nWidget {marker}\nTOTAL {marker}\nGBP")
+    assert e.currency == "USD"
+    assert "currency" not in e.field_confidence
     assert e.total == 5.00
 
 

@@ -174,18 +174,11 @@ export default function Dashboard() {
   }
   if (!data) return <section>{heading}<p role="status" className="mt-6 text-muted">Loading your dashboard…</p></section>;
 
-  const otherCurrencies = data.other_currency_count > 0 && (
-    <p role="status" className="rounded-xl bg-caution-soft p-3 text-sm text-caution">
-      {data.other_currency_count} {data.other_currency_count === 1 ? "expense" : "expenses"} in other currencies {data.other_currency_count === 1 ? "isn't" : "aren't"} counted here, because amounts aren't converted.
-    </p>
-  );
-
   if (data.expense_count < MIN_EXPENSES) {
     const left = MIN_EXPENSES - data.expense_count;
     return (
       <section className="space-y-6">
         {heading}
-        {otherCurrencies}
         <div className="rounded-2xl border border-line p-10 text-center">
           <p className="font-medium text-pine">Your dashboard is almost ready</p>
           <p className="mt-1 text-sm text-muted">
@@ -202,7 +195,6 @@ export default function Dashboard() {
   return (
     <section className="space-y-4">
       <div className="pb-2">{heading}</div>
-      {otherCurrencies}
       <BudgetPace data={data} />
       <Insights data={data} />
       <Card title="Where it went" synthetic={data.categories.includes_synthetic}>

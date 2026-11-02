@@ -221,7 +221,7 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
   "document_type": "receipt | payment_screenshot | not_an_expense | unreadable",
   "merchant": "string | null",
   "date": "YYYY-MM-DD | null",
-  "currency": "USD | EUR | GBP | INR | CAD | ... | null",
+  "currency": "USD",
   "subtotal": "number | null",
   "tax": "number | null",
   "tip": "number | null",
@@ -250,7 +250,6 @@ Priorities: **P0** = must have for the demo, **P1** = should have if time allows
 | `date` | Regex for `MM/DD/YYYY`, `MM/DD/YY`, `YYYY-MM-DD`, `Mon D, YYYY`, `Month D, YYYY`, `D Mon YYYY`. Assume US month-first for slashed dates. | high if exactly one distinct date; medium if several (use the first); null if none |
 | `merchant` | 1) If any keyword from `categories.json` rules appears in the top 10 lines, use that merchant name → high. 2) Otherwise the first line in the top 6 that has ≥ 3 letters and isn't a phone number, URL, street address (starts with digits + street word), date, or a generic word (`RECEIPT`, `WELCOME`, `THANK YOU`, `INVOICE`, `ORDER`) → medium. Title-case the result. | as noted |
 | `payment_method` | `VISA`/`MASTERCARD`/`AMEX`/`DISCOVER`/`DEBIT`/`CREDIT` → card; `CASH` → cash; `VENMO`/`ZELLE`/`PAYPAL` → that value | — |
-| `currency` | `€`/`EUR`, `£`/`GBP`, `₹`/`INR`, `CA$`/`CAD`; `$` alone → USD; nothing → USD with medium confidence | — |
 | `line_items` | Lines between the merchant header block and the subtotal line (or the total line if there's no subtotal) that contain ≥ 2 letters, end with an amount, and don't match any keyword above. Parse quantity from `2 @ 3.99`, `2 x`, or `2X` patterns. | medium |
 
 **Payment screenshots:** `merchant` = the recipient name following "Paid to" / "Sent to" / "You paid" (up to the end of the line or the amount); `total` = the first amount; `line_items` = empty.
@@ -279,7 +278,6 @@ class ExtractionBackend(Protocol):
 | V06 | `date` in the future | error (blocks save) | "Date is in the future." |
 | V07 | `date` > 365 days old | warning | "This expense is over a year old. Is the date right?" |
 | V08 | `subtotal + tax + tip` ≠ `total` (tolerance $0.05) when subtotal and total are present | warning | "Subtotal + tax + tip = $X but total is $Y. Please check the amounts." |
-| V10 | `currency` is not USD | warning | "Currency is EUR. Amounts are stored as-is; conversion isn't supported yet." |
 | V11 | any `field_confidence` is `low` | warning | Highlight the field: "Please double-check the total." |
 | V12 | `merchant` missing | warning | "Merchant not found; please add one." |
 
@@ -336,7 +334,6 @@ Two-column layout (stacks on mobile):
 - Monthly budget (USD)
 - Budget cycle start day (1–28, default 1). This supports allowance or stipend cycles that don't start on the 1st of the month.
 - Demo data section: **"Load synthetic demo data"** and **"Remove synthetic demo data"** buttons.
-- P1: home currency code + manual exchange rate (USD → home), used only for display.
 
 ### 6.11 Periods (P0)
 `periods.py` provides:
@@ -408,7 +405,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   user_id UUID NOT NULL,
   merchant TEXT NOT NULL,
   date DATE NOT NULL,
-  total NUMERIC(12,2) NOT NULL,       -- positive number, in `currency`
+  total NUMERIC(12,2) NOT NULL,       -- positive number, in USD
   currency TEXT NOT NULL DEFAULT 'USD',
   subtotal NUMERIC(12,2), tax NUMERIC(12,2), tip NUMERIC(12,2),
   category TEXT NOT NULL,
@@ -473,7 +470,7 @@ Row-level security is enabled on all three tables, limiting each row to its owne
   - no total keyword → largest-amount fallback with `low` confidence
 - `ocr.py`: preprocessing returns grayscale; inversion triggers for a dark image (no real OCR needed in this test).
 - `files.py`: a PDF with a text layer returns text; the empty-text case triggers the render path (can mock pdfplumber).
-- `validation.py`: each rule V01–V12 (V09 removed) has at least one test, including tolerance edges for V08.
+- `validation.py`: each rule V01–V12 (V09 and V10 removed) has at least one test, including tolerance edges for V08.
 - `categorize.py`: override beats doc type beats rule beats default; `UBER EATS` → Food Delivery, not Transport.
 - `duplicates.py`: exact hash match; likely match on the same total, date and merchant; no false positive for the same merchant on a different date.
 - `periods.py`: cycle start day 1 and 15; month boundaries; February.
@@ -518,7 +515,7 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 - **Viewing and searching the items on a bill**, which the owner wants next: see what was bought on a given day, and search across bills. Stored text and items in `extraction_json` make this possible for past receipts too.
 - **AI vision backend for more accuracy**, which is future scope and not paid for now. Testing on real receipts showed OCR results on borderline phone photos vary with the Tesseract version. (`EXTRACTION_BACKEND=claude` or `ollama`) implementing the same `ExtractionBackend` interface and returning the same `Extraction` model. Then a small script that runs every file in `fixtures/demo_files/` through both backends and reports field accuracy and seconds per file, for the case-study write-up.
 - Item name normalization and the `repeat_item` insight.
-- Home-currency display.
+- Support for currencies other than USD.
 
 ---
 
@@ -532,7 +529,7 @@ Work through these in order. Finish each milestone's acceptance criteria and run
 - Dependencies, sample data, example inputs and their expected outputs, and the demo scenarios from section 9
 - What's implemented, what's synthetic or mocked and how to remove it, and what's deferred
 - Time spent, how AI was used and how its output was checked, and any prior work reused
-- Known limitations and next steps: AI vision backend, bank CSV import, viewing and searching the items on a bill, refunds, receipt line item insights, home-currency view, roommate splits
+- Known limitations and next steps: AI vision backend, bank CSV import, viewing and searching the items on a bill, refunds, receipt line item insights, other currencies, roommate splits
 
 ---
 

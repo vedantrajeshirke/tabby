@@ -217,7 +217,6 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
   const issues = report?.issues ?? [];
   const blockers = issues.filter((i) => i.severity === "error" && !["V01", "V02"].includes(i.code));
   const warnings = issues.filter((i) => i.severity === "warning");
-  const currency = existing?.currency ?? extraction?.currency ?? "USD";
   const canSave = canCheck && !saving && !checking && report !== null && !report.blocks_save;
   const shownCategory = category ?? report?.category ?? existing?.category ?? "";
   const rawText = existing?.extraction?.raw_text ?? extraction?.raw_text;
@@ -255,7 +254,7 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
             ))}
           </div>
 
-          {amountInput("total", currency === "USD" ? "Total ($)" : `Total (${currency})`, true)}
+          {amountInput("total", "Total ($)", true)}
 
           <Field label="Merchant" htmlFor="merchant" {...fieldState("merchant")}>
             <input

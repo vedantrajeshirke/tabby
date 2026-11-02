@@ -14,7 +14,7 @@ WINDOW = insights.Window(TODAY, date(2026, 11, 1), date(2026, 11, 30))
 def frame(*rows: tuple) -> pd.DataFrame:
     """Rows of (merchant, total, category)."""
     records = [
-        {"id": i, "merchant": m, "date": "2026-11-05", "total": t, "currency": "USD", "category": c, "is_synthetic": False}
+        {"id": i, "merchant": m, "date": "2026-11-05", "total": t, "category": c, "is_synthetic": False}
         for i, (m, t, c) in enumerate(rows)
     ]
     return pd.DataFrame(records, columns=COLUMNS).astype({"total": "float64"})

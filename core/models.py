@@ -48,7 +48,7 @@ class Extraction:
     document_type: str  # receipt | payment_screenshot | not_an_expense | unreadable
     merchant: str | None = None
     date: str | None = None  # YYYY-MM-DD
-    currency: str | None = None
+    currency: str = "USD"
     subtotal: float | None = None
     tax: float | None = None
     tip: float | None = None

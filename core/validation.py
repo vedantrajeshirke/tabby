@@ -56,13 +56,6 @@ def _check_amounts(e: Extraction) -> list[ValidationIssue]:
     return [_warning("V08", "total", message)]
 
 
-def _check_currency(e: Extraction) -> list[ValidationIssue]:
-    if e.currency and e.currency != "USD":
-        message = f"Currency is {e.currency}. Amounts are stored as-is; conversion isn't supported yet."
-        return [_warning("V10", "currency", message)]
-    return []
-
-
 def _check_confidence(e: Extraction) -> list[ValidationIssue]:
     return [
         _warning("V11", field, f"Please double-check the {field}.")
@@ -84,7 +77,6 @@ def validate(e: Extraction, today: date | None = None) -> list[ValidationIssue]:
         *_check_total(e),
         *_check_date(e, today or date.today()),
         *_check_amounts(e),
-        *_check_currency(e),
         *_check_confidence(e),
         *_check_merchant(e),
     ]

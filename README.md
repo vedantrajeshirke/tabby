@@ -96,7 +96,7 @@ The browser tests use a throwaway stack with its own database and mock receipts,
 - **Implemented:** upload, OCR and PDF reading, review and confirm, validation, duplicates, categories, expense list, dashboard with four insight types, budget cycles, accounts, data separation and account deletion.
 - **Synthetic:** demo data is labeled wherever it appears and can be hidden on the dashboard. **Settings → Remove synthetic demo data** deletes only those rows.
 - **Mocked:** only when `EXTRACTION_BACKEND=mock` is set, always with a visible banner.
-- **Deferred:** viewing and searching items on a bill, AI vision for harder photos, refunds, bank CSV import, home-currency view, and roommate splits.
+- **Deferred:** viewing and searching items on a bill, AI vision for harder photos, refunds, bank CSV import, other currencies, and roommate splits.
 
 ## Dependencies
 
@@ -117,7 +117,7 @@ Charts are hand-built with SVG and HTML, because Plotly would add megabytes to t
 ## Known limitations
 
 - **OCR accuracy varies.** Borderline phone photos can read differently between Tesseract versions, and may fall back to manual entry. Line items are read but not shown yet.
-- **Amounts aren't converted.** Dashboard totals count USD only, and other currencies are noted as left out.
+- **USD only.** Every amount is treated as US dollars, including on receipts showing another currency symbol.
 - **Expenses only.** Refunds and credits aren't tracked.
 - **Upload limits are per server.** The rate limit is kept in memory, so it resets on restart.
 - **Free hosting sleeps.** Free Supabase projects pause after a week of inactivity, and free API hosts can take a while to wake.
@@ -125,7 +125,7 @@ Charts are hand-built with SVG and HTML, because Plotly would add megabytes to t
 
 ## Next steps
 
-An AI vision backend for hard photos, bank CSV import, viewing and searching the items on a bill, refunds, line-item insights, a home-currency view, and roommate splits.
+An AI vision backend for hard photos, bank CSV import, viewing and searching the items on a bill, refunds, line-item insights, other currencies, and roommate splits.
 
 ## Time, AI use and prior work
 

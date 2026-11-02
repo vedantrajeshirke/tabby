@@ -12,7 +12,6 @@ function today() {
 const SAMPLE = {
   period: { start: "2026-11-01", end: "2026-11-30", label: "November 2026", days_elapsed: 14, days_left: 16, length: 30 },
   expense_count: 6,
-  other_currency_count: 1,
   any_synthetic: true,
   spent: 620,
   average_daily: 44.29,
@@ -67,7 +66,7 @@ test("saved expenses reach the real dashboard", async ({ page, request }) => {
 });
 
 test("fewer than three expenses shows a friendly message instead of empty charts", async ({ page }) => {
-  await page.route("**/api/dashboard**", (route) => route.fulfill({ json: { ...SAMPLE, expense_count: 2, other_currency_count: 0 } }));
+  await page.route("**/api/dashboard**", (route) => route.fulfill({ json: { ...SAMPLE, expense_count: 2 } }));
   await goToDashboard(page);
   await expect(page.getByText("Add 1 more expense this period")).toBeVisible();
   await expect(page.getByRole("link", { name: "Add expense" })).toBeVisible();
@@ -84,7 +83,6 @@ test("over budget, insights, comparison and labels all show", async ({ page }) =
   await expect(page.getByText("+$120.00 (+40%)")).toBeVisible();
   await expect(page.getByText("−$50.00 (−20%)")).toBeVisible();
   await expect(page.getByText("Includes synthetic demo data")).toHaveCount(2); // only the sections with synthetic rows
-  await expect(page.getByText("1 expense in other currencies isn't counted")).toBeVisible();
 
   await page.locator('rect[aria-label^="October 2026"]').focus();
   await expect(page.getByRole("status").filter({ hasText: "October 2026" })).toContainText("$550.00");

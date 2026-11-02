@@ -33,7 +33,7 @@ class ExtractionIn(Strict):
     document_type: Literal["receipt", "payment_screenshot", "not_an_expense", "unreadable", "manual"]
     merchant: str | None = Field(default=None, max_length=200)
     date: str | None = Field(default=None, max_length=10)
-    currency: str | None = Field(default=None, max_length=3)
+    currency: str | None = Field(default="USD", max_length=3)
     subtotal: Amount | None = None
     tax: Amount | None = None
     tip: Amount | None = None

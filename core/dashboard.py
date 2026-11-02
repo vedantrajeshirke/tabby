@@ -7,10 +7,9 @@ import pandas as pd
 from core import insights, periods
 from core.models import Settings
 
-HOME_CURRENCY = "USD"  # amounts aren't converted, so other currencies can't be added in
 TREND_PERIODS = 6
 TOP_EXPENSES = 5
-COLUMNS = ["id", "merchant", "date", "total", "currency", "category", "is_synthetic"]
+COLUMNS = ["id", "merchant", "date", "total", "category", "is_synthetic"]
 
 
 def _between(df: pd.DataFrame, start: date, end: date) -> pd.DataFrame:
@@ -94,10 +93,9 @@ def fetch_range(today: date, cycle_start_day: int) -> tuple[date, date]:
 def build(rows: list[dict], settings: Settings, today: date, hide_synthetic: bool = False) -> dict:
     everything = pd.DataFrame(rows, columns=COLUMNS).astype({"total": "float64", "is_synthetic": "bool"})
     start, end = periods.current_period(today, settings.cycle_start_day)
-    other_currencies = int((_between(everything, start, end)["currency"] != HOME_CURRENCY).sum())
     any_synthetic = _has_synthetic(everything)
 
-    df = everything[everything["currency"] == HOME_CURRENCY]
+    df = everything
     if hide_synthetic:
         df = df[~df["is_synthetic"]]
 
@@ -120,7 +118,6 @@ def build(rows: list[dict], settings: Settings, today: date, hide_synthetic: boo
             "length": periods.period_length(start, end),
         },
         "expense_count": len(current),
-        "other_currency_count": other_currencies,
         "any_synthetic": any_synthetic,
         "spent": spent,
         "average_daily": round(spent / elapsed, 2),

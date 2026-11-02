@@ -69,7 +69,6 @@ def build_expense(
         merchant=edited.merchant or UNKNOWN_MERCHANT,
         date=edited.date,
         total=round(edited.total, 2),
-        currency=original.currency or "USD",
         subtotal=edited.subtotal,
         tax=edited.tax,
         tip=edited.tip,

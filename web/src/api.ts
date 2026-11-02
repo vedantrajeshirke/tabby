@@ -58,7 +58,6 @@ export type SavedExpense = {
   merchant: string;
   date: string;
   total: number;
-  currency: string;
   subtotal: number | null;
   tax: number | null;
   tip: number | null;
@@ -74,7 +73,6 @@ export type Period = { start: string; end: string; label: string };
 export type Dashboard = {
   period: { start: string; end: string; label: string; days_elapsed: number; days_left: number; length: number };
   expense_count: number;
-  other_currency_count: number;
   any_synthetic: boolean;
   spent: number;
   average_daily: number;

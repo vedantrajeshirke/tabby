@@ -99,12 +99,6 @@ def test_item_sums_are_not_checked():
     assert codes(e) == []
 
 
-def test_v10_non_usd_warns():
-    issues = validate(good(currency="EUR"), TODAY)
-    assert [i.code for i in issues] == ["V10"]
-    assert "EUR" in issues[0].message
-
-
 def test_v11_low_confidence_names_the_field():
     issues = validate(good(field_confidence={"total": "low", "date": "medium", "merchant": "high"}), TODAY)
     assert [(i.code, i.field) for i in issues] == [("V11", "total")]

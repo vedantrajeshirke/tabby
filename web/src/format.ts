@@ -6,8 +6,8 @@ export function localToday(): string {
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-export function formatMoney(amount: number, currency = "USD"): string {
-  return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(amount);
+export function formatMoney(amount: number): string {
+  return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(amount);
 }
 
 /** An amount as typed: `null` when empty, `NaN` when it isn't a number. */

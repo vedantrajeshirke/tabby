@@ -244,23 +244,6 @@ def parse_payment_method(text: str) -> tuple[str | None, str]:
     return None, "no payment method found"
 
 
-def parse_currency(text: str) -> tuple[str, str, str]:
-    """Return (currency, confidence, reason)."""
-    upper = text.upper()
-    for currency, pattern in (
-        # Symbols must touch a number, because OCR noise often produces a stray one.
-        ("EUR", r"€\s?\d|\bEUR\b"),
-        ("GBP", r"£\s?\d|\bGBP\b"),
-        ("INR", r"₹\s?\d|\bINR\b"),
-        ("CAD", r"CA\$|\bCAD\b"),
-    ):
-        if re.search(pattern, upper):
-            return currency, "high", f"found a {currency} symbol or code"
-    if "$" in upper or re.search(r"\bUSD\b", upper):
-        return "USD", "high", "found '$' or 'USD'"
-    return "USD", "medium", "no currency marker found; assumed USD"
-
-
 def _item_from_line(line: str, fallback_name: str = "") -> LineItem | None:
     amount = _last_amount(line)
     if not amount or not re.fullmatch(r"\s*[-)]?\s*[A-Za-z]?[\s|.,'’]*", line[amount.end :]):
@@ -355,8 +338,6 @@ def _set_field(extraction: Extraction, name: str, value, confidence: str | None,
 def _parse_shared_fields(extraction: Extraction, text: str) -> None:
     extraction_date, date_confidence, date_reason = parse_date(text)
     _set_field(extraction, "date", extraction_date, date_confidence, date_reason)
-    currency, currency_confidence, currency_reason = parse_currency(text)
-    _set_field(extraction, "currency", currency, currency_confidence, currency_reason)
     method, method_reason = parse_payment_method(text)
     _set_field(extraction, "payment_method", method, None, method_reason)
 

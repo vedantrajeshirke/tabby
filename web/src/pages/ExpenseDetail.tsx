@@ -94,16 +94,16 @@ export default function ExpenseDetailPage() {
         <h1 className="min-w-0 text-3xl font-semibold tracking-tight break-words text-pine">{expense.merchant}</h1>
         {expense.is_synthetic && <SyntheticTag />}
       </div>
-      <p className="amount mt-3 text-4xl font-semibold">{formatMoney(expense.total, expense.currency)}</p>
+      <p className="amount mt-3 text-4xl font-semibold">{formatMoney(expense.total)}</p>
       <p className="mt-2 text-muted">{formatDate(expense.date)}</p>
 
       <dl className="mt-6 border-b border-line">
         <Row label="Category"><CategoryTag name={expense.category} /></Row>
         <Row label="Category from">{expense.category_label}</Row>
         <Row label="Payment">{paymentLabel(expense.payment_method)}</Row>
-        {expense.subtotal != null && <Row label="Subtotal"><span className="amount">{formatMoney(expense.subtotal, expense.currency)}</span></Row>}
-        {expense.tax != null && <Row label="Tax"><span className="amount">{formatMoney(expense.tax, expense.currency)}</span></Row>}
-        {expense.tip != null && <Row label="Tip"><span className="amount">{formatMoney(expense.tip, expense.currency)}</span></Row>}
+        {expense.subtotal != null && <Row label="Subtotal"><span className="amount">{formatMoney(expense.subtotal)}</span></Row>}
+        {expense.tax != null && <Row label="Tax"><span className="amount">{formatMoney(expense.tax)}</span></Row>}
+        {expense.tip != null && <Row label="Tip"><span className="amount">{formatMoney(expense.tip)}</span></Row>}
         {expense.note && <Row label="Note">{expense.note}</Row>}
       </dl>
 

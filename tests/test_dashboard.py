@@ -9,8 +9,8 @@ TODAY = date(2026, 11, 14)
 next_id = iter(range(1, 10_000))
 
 
-def row(day: str, total: float, category: str = "Other", merchant: str = "Shop", currency: str = "USD", synthetic: bool = False) -> dict:
-    return {"id": next(next_id), "merchant": merchant, "date": day, "total": total, "currency": currency, "category": category, "is_synthetic": synthetic}
+def row(day: str, total: float, category: str = "Other", merchant: str = "Shop", synthetic: bool = False) -> dict:
+    return {"id": next(next_id), "merchant": merchant, "date": day, "total": total, "category": category, "is_synthetic": synthetic}
 
 
 def build(rows, settings=None, today=TODAY, **options):
@@ -94,14 +94,6 @@ def test_trend_is_at_most_six_periods():
 def test_top_five_by_amount():
     rows = [row("2026-11-02", amount, merchant=f"M{amount}") for amount in (1, 2, 3, 4, 5, 6, 7)]
     assert [r["merchant"] for r in build(rows)["top"]["rows"]] == ["M7", "M6", "M5", "M4", "M3"]
-
-
-def test_other_currencies_are_counted_separately_not_added_in():
-    result = build([row("2026-11-02", 10), row("2026-11-03", 900, currency="EUR")])
-    assert result["spent"] == 10
-    assert result["expense_count"] == 1
-    assert result["other_currency_count"] == 1
-    assert [r["total"] for r in result["top"]["rows"]] == [10]
 
 
 def test_synthetic_rows_are_labeled_per_section_and_can_be_hidden():
