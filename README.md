@@ -6,34 +6,86 @@ Tabby is a personal expense tracker for students. Upload a receipt, PDF or payme
 
 ## Run it locally
 
-You need [Docker](https://www.docker.com/) and no accounts of any kind.
+Running locally needs no accounts and no internet services. Everything, including the database, runs on your own computer.
 
-```
-docker compose up --build
-```
+### Option 1: Docker (recommended)
 
-Open http://localhost:5173. Local mode uses one built-in demo user with no sign-in, and all data stays on your computer. For a quick tour, go to **Settings → Load synthetic demo data**, then open **Dashboard**.
+**You need:** [Git](https://git-scm.com/downloads) and [Docker Desktop](https://www.docker.com/products/docker-desktop/), installed and running. Nothing else: Python, Node, Postgres and Tesseract all come inside the containers.
 
-To simulate extraction instead of running OCR, use `EXTRACTION_BACKEND=mock docker compose up --build`. A "MOCK MODE" banner stays visible, and the result is chosen by file name (see `fixtures/mock_extractions/`).
+1. Get the code:
 
-### Without Docker
+   ```
+   git clone https://github.com/vedantrajeshirke/tabby.git
+   cd tabby
+   ```
 
-Requires Python 3.11+, Node 20+, Postgres and Tesseract.
+2. Build and start it:
 
-| System | Install Tesseract |
-|---|---|
-| macOS | `brew install tesseract` |
-| Ubuntu/Debian | `sudo apt install tesseract-ocr` |
-| Windows | [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki), then set `TESSERACT_CMD` to its full path |
+   ```
+   docker compose up --build
+   ```
 
-```
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
-AUTH_MODE=local DATABASE_URL=<your local Postgres connection string> uvicorn api.main:app --port 8000
-cd web && npm install && npm run dev
-```
+   The first build takes a few minutes, because it downloads Postgres, Python, Node and Tesseract. Later starts take seconds. It's ready when the log shows `Application startup complete`.
 
-If Tesseract is missing, the app says so and everything except reading photos and scanned PDFs still works.
+3. Open http://localhost:5173. There's no sign-in: local mode uses one built-in demo user.
+
+4. Try it:
+   - **Add an expense:** on **Add**, choose a file from `fixtures/sample_receipts/` (all made up). See [Sample files and expected results](#sample-files-and-expected-results) for what each one should show.
+   - **See the dashboard with data:** go to **Settings → Load synthetic demo data**, then open **Dashboard**. Demo rows are labelled, and **Remove synthetic demo data** deletes only those.
+
+5. Stop it with `Ctrl+C`, or `docker compose down` from another terminal. Your expenses are kept for next time. To erase them too, run `docker compose down -v`.
+
+**If a port is taken:** the app uses ports 5173, 8000 and 5433 on your computer. Pick others like this: `WEB_PORT=5180 API_PORT=8010 DB_PORT=5440 docker compose up --build`, then open the new web port.
+
+**Mock mode:** to simulate reading instead of running OCR, start it with `EXTRACTION_BACKEND=mock docker compose up --build`. A "MOCK MODE" banner stays visible, and the result is chosen by file name (see `fixtures/mock_extractions/`).
+
+### Which database and sign-in each setup uses
+
+| How you run it | Database | Sign-in | Your data goes to |
+|---|---|---|---|
+| **Docker, as above** | A Postgres container on your own computer, created on first start | None: one built-in demo user | Nowhere. It stays on your computer, in a Docker volume. |
+| **Without Docker** (below) | A Postgres you run yourself | None: one built-in demo user | Nowhere |
+| **Hosted app** (link above) | The author's Supabase project | Email and password accounts | That Supabase project, kept separate per account |
+| **Your own hosted copy** ([Hosted setup](#hosted-setup)) | Your own Supabase project | Your own Supabase accounts | Your Supabase project |
+
+Running the code never connects to the author's database or accounts. Those keys live only in the author's private `.env` file and hosting settings, never in this repository. The database password in `docker-compose.yml` only works for the container on your own computer, which is reachable from that computer alone.
+
+### Option 2: Without Docker
+
+**You need:** Git, Python 3.11 or newer, Node 20 or newer, Tesseract, and a Postgres database.
+
+1. **Install Tesseract**, the free OCR program:
+
+   | System | Command |
+   |---|---|
+   | macOS | `brew install tesseract` |
+   | Ubuntu/Debian | `sudo apt install tesseract-ocr` |
+   | Windows | [UB Mannheim installer](https://github.com/UB-Mannheim/tesseract/wiki), then set `TESSERACT_CMD` to its full path |
+
+   If Tesseract is missing, the app says so, and everything except reading photos and scanned PDFs still works.
+
+2. **Get a Postgres database.** The simplest way is to start only the database container: `docker compose up -d db`, which listens on port 5433. Otherwise, create an empty database in your own Postgres with a user that is allowed to create roles. The app creates its tables and a restricted role on first start.
+
+3. **Start the API** from the project folder:
+
+   ```
+   python -m venv .venv
+   source .venv/bin/activate          # Windows: .venv\Scripts\activate
+   pip install -r requirements-dev.txt
+   AUTH_MODE=local DATABASE_URL=postgresql://snapspend:snapspend@localhost:5433/snapspend uvicorn api.main:app --port 8000
+   ```
+
+   With your own Postgres, use its connection string instead, in the form `postgresql://USER:PASSWORD@HOST:PORT/DATABASE`. On Windows, set the two variables first (`set AUTH_MODE=local`, then `set DATABASE_URL=...`) and run `uvicorn api.main:app --port 8000`.
+
+4. **Start the website** in a second terminal:
+
+   ```
+   cd web
+   npm install
+   npm run dev
+   ```
+
+5. Open http://localhost:5173.
 
 ### From a phone
 
@@ -43,7 +95,7 @@ On the hosted app, sign in and tap **Choose a photo or file**. On a phone, the p
 
 1. **Get the text.** A PDF with a text layer is read directly. Scanned PDFs and photos go through Tesseract OCR, including iPhone HEIC photos.
 2. **Parse it.** Rules find the merchant, date, amounts and payment method. Each field gets a confidence level and a reason, shown on the review screen.
-3. **Validate.** Rules flag missing totals, future dates, amounts that don't add up, and so on. Only a missing or non-positive total, or a future date, blocks saving.
+3. **Validate.** Rules flag missing totals, future dates, amounts that don't add up, and so on. Only a missing merchant, a missing or non-positive total, or a future date blocks saving.
 4. **Categorize.** Your past choice comes first, then the document type, then merchant keywords in `config/categories.json`.
 5. **Confirm.** Nothing is saved until you review it and press Save.
 
