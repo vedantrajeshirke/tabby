@@ -1,6 +1,8 @@
+import asyncio
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.concurrency import run_in_threadpool
 
 from api import rate_limit
 from api.deps import current_user, get_conn
@@ -9,6 +11,7 @@ from core import confirm, expenses, files
 from core.extraction import get_backend
 
 router = APIRouter()
+reading = asyncio.Semaphore(1)  # OCR is heavy, so a small server reads one receipt at a time
 
 
 async def read_upload(file: UploadFile) -> tuple[bytes, str]:
@@ -33,7 +36,8 @@ async def create_extraction(
     if not rate_limit.allow_upload(user_id):
         raise HTTPException(status_code=429, detail="That's a lot of uploads at once. Wait a minute, then try again.")
     data, filename = await read_upload(file)
-    extraction = get_backend().extract(data, filename)
+    async with reading:  # off the event loop, so the server keeps answering while it reads
+        extraction = await run_in_threadpool(get_backend().extract, data, filename)
     file_hash = files.file_hash(data)
     today = expenses.resolve_today(client_today)
     return {

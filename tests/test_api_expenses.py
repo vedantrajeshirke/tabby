@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import date, datetime, timedelta, timezone
 
@@ -8,6 +9,7 @@ from api import deps, rate_limit
 from api.main import app
 from core import db
 from core import files
+from core.models import Extraction
 from tests.helpers import text_pdf
 
 USER_A = "00000000-0000-0000-0000-00000000000a"
@@ -477,3 +479,14 @@ def test_dashboard_opens_a_past_period_for_this_user_only(api):
     other = api.get("/api/dashboard?period=2025-03-01").json()
     assert other["spent"] == 0
     assert len(other["trend"]["history"]) == 1
+
+
+def test_reading_a_receipt_does_not_block_the_server(api, monkeypatch):
+    class OffTheEventLoop:
+        def extract(self, file_bytes, filename):
+            with pytest.raises(RuntimeError):  # no running loop here means other requests can still be answered
+                asyncio.get_running_loop()
+            return Extraction(document_type="receipt")
+
+    monkeypatch.setattr("api.routes.extractions.get_backend", OffTheEventLoop)
+    assert api.post("/api/extractions", files={"file": ("made-up.png", b"not really an image")}).status_code == 200
