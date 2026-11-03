@@ -133,6 +133,6 @@ What I would investigate next: how often each field gets corrected after it is r
 ## Time, AI use and prior work
 
 - **Time spent:** 4 hours.
-- **How AI was used:** Claude Code wrote the code, working milestone by milestone from `SPEC.md` and from what I gave it: my idea and approach, the design decisions and features, how the app should look, and the test cases it had to pass. I also used AI to think through the technical choices: confirming the tech stack, finding free or low-cost hosting, and picking the OCR approach that would work best and run efficiently on a small server.
+- **How AI was used:** Claude Code wrote the code, milestone by milestone, from what I gave it: my idea and approach, the design decisions and features, how the app should look, and the test cases it had to pass. I also used AI to think through the technical choices: confirming the tech stack, finding free or low-cost hosting, and picking the OCR approach that would work best and run efficiently on a small server.
 - **How its output was checked:** with the automated tests above, by running the app after each change, and by testing it by hand with my own test cases and real receipts on the live site.
 - **Prior work reused:** none outside the open-source dependencies listed above.
