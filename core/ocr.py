@@ -7,8 +7,10 @@ from pytesseract import Output
 
 MIN_WIDTH = 1200
 UPSCALE_WIDTH = 1600
+MAX_SIDE = 2000  # phone photos read just as well at this size, and far faster on a small server
 DARK_MEAN_BRIGHTNESS = 100
-OCR_TIMEOUT_SECONDS = 60
+OCR_TIMEOUT_SECONDS = 120  # a small free server can need about a minute for a messy phone photo
+CONFIDENT_ENOUGH = 90  # above this, a second pass on the crop is not worth the wait
 CROP_MIN_WORD_CONF = 60
 CROP_MIN_WORD_CHARS = 3
 CROP_MIN_WORDS = 5
@@ -34,8 +36,10 @@ def _flatten_alpha(image: Image.Image) -> Image.Image:
 
 
 def preprocess(image: Image.Image) -> Image.Image:
-    """Grayscale, upscale small images, stretch contrast, invert dark-mode screenshots."""
+    """Grayscale, resize, stretch contrast, invert dark-mode screenshots."""
     gray = _flatten_alpha(image).convert("L")
+    if max(gray.size) > MAX_SIDE:
+        gray = ImageOps.contain(gray, (MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
     if gray.width < MIN_WIDTH:
         height = round(gray.height * UPSCALE_WIDTH / gray.width)
         gray = gray.resize((UPSCALE_WIDTH, height), Image.Resampling.LANCZOS)
@@ -96,7 +100,7 @@ def run_ocr(image: Image.Image, tesseract_cmd: str = "") -> OcrResult:
     data = _image_to_data(processed)
     result = result_from_data(data)
     box = crop_box(data, processed.size)
-    if box is None:
+    if box is None or result.mean_confidence >= CONFIDENT_ENOUGH:
         return result
     cropped = result_from_data(_image_to_data(processed.crop(box)))
     return cropped if cropped.mean_confidence > result.mean_confidence else result

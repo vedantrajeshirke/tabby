@@ -103,7 +103,16 @@ export default function App() {
   }, [confirmation]);
 
   if (apiError) return <Notice>Can't reach the Tabby API. Check that it's running, then refresh this page.</Notice>;
-  if (!status) return null;
+  if (!status) {
+    return (
+      <main className="grid min-h-dvh place-items-center p-4 text-center">
+        <div role="status">
+          <p className="font-medium text-pine">Starting Tabby…</p>
+          <p className="mt-1 text-sm text-muted">If it's been idle, this can take up to a minute.</p>
+        </div>
+      </main>
+    );
+  }
 
   if (status.auth_mode === "local") return <Shell status={status} />;
   if (!supabase) return <Notice>Sign-in isn't set up on this site yet, so your data can't be opened.</Notice>;

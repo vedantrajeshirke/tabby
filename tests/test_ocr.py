@@ -111,6 +111,7 @@ def _run_with_passes(monkeypatch, first_conf, second_conf):
         return _words(CENTERED, conf=conf)
 
     monkeypatch.setattr(ocr, "_image_to_data", fake)
+    monkeypatch.setattr(ocr, "MAX_SIDE", 4000)
     return ocr.run_ocr(Image.new("L", (3000, 4000), 255)), calls
 
 
@@ -118,6 +119,12 @@ def test_cropped_pass_used_when_more_confident(monkeypatch):
     result, calls = _run_with_passes(monkeypatch, 70, 85)
     assert result.mean_confidence == 85
     assert calls == [(3000, 4000), (620, 3060)]
+
+
+def test_no_second_pass_when_first_is_confident(monkeypatch):
+    result, calls = _run_with_passes(monkeypatch, 95, 99)
+    assert result.mean_confidence == 95
+    assert len(calls) == 1
 
 
 def test_first_pass_kept_when_crop_is_worse(monkeypatch):
@@ -136,3 +143,8 @@ def test_real_ocr_reads_receipt_on_a_noisy_background():
     scene.paste(receipt, (1000, 1500))
     result = ocr.run_ocr(scene)
     assert "TOTAL 5.00" in result.text
+
+
+def test_preprocess_shrinks_large_photos_and_keeps_their_shape():
+    processed = ocr.preprocess(Image.new("RGB", (3024, 4032), "white"))
+    assert processed.size == (1500, 2000)

@@ -213,6 +213,20 @@ test("deleting an account needs the right password, which never goes to our API"
   expect(apiBodies).toEqual([JSON.stringify({ confirm: "DELETE" })]);
 });
 
+test("a slow start shows a message instead of a blank page", async ({ page }) => {
+  await fakeBackends(page, []);
+  let release = () => {};
+  const waiting = new Promise<void>((resolve) => { release = resolve; });
+  await page.route("**/api/status", async (route) => {
+    await waiting;
+    await route.fulfill({ json: { tesseract_available: true, tesseract_help: null, mock_mode: false, auth_mode: "supabase" } });
+  });
+  await page.goto(APP);
+  await expect(page.getByText("Starting Tabby…")).toBeVisible();
+  release();
+  await expect(page.getByRole("heading", { name: "Welcome back" })).toBeVisible();
+});
+
 test("create-account and reset screens are reachable", async ({ page }) => {
   await fakeBackends(page, []);
   await page.goto(APP);

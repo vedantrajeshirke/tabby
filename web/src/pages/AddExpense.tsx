@@ -149,7 +149,7 @@ export default function AddExpense({ localMode }: { localMode: boolean }) {
         <div role="status" className="mt-6 flex flex-col items-center rounded-2xl border border-line p-12 text-center">
           <span aria-hidden="true" className="size-8 animate-spin rounded-full border-3 border-mint border-t-forest" />
           <p className="mt-4 font-medium text-pine">Reading your receipt…</p>
-          <p className="mt-1 text-sm text-muted">This can take a few seconds.</p>
+          <p className="mt-1 text-sm text-muted">This can take up to a minute.</p>
           <button onClick={reset} className="mt-4 text-sm font-medium text-forest hover:underline">Cancel</button>
         </div>
       ) : (
