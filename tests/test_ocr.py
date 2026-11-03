@@ -105,7 +105,7 @@ def test_no_crop_when_receipt_fills_the_frame():
 def _run_with_passes(monkeypatch, first_conf, second_conf):
     calls = []
 
-    def fake(image):
+    def fake(image, timeout=0):
         calls.append(image.size)
         conf = first_conf if len(calls) == 1 else second_conf
         return _words(CENTERED, conf=conf)
@@ -147,4 +147,43 @@ def test_real_ocr_reads_receipt_on_a_noisy_background():
 
 def test_preprocess_shrinks_large_photos_and_keeps_their_shape():
     processed = ocr.preprocess(Image.new("RGB", (3024, 4032), "white"))
-    assert processed.size == (1500, 2000)
+    assert max(processed.size) == ocr.MAX_SIDE
+    assert abs(processed.width / processed.height - 3024 / 4032) < 0.01
+
+
+def _photo(paper_box=None, size=(1200, 1600)):
+    image = Image.new("L", size, 60)
+    if paper_box:
+        image.paste(235, paper_box)
+    return image
+
+
+def test_find_paper_cuts_a_receipt_out_of_a_dark_background():
+    left, top, right, bottom = ocr.find_paper(_photo((400, 300, 800, 1300)))
+    assert 300 < left < 400 and 200 < top < 300 and 800 < right < 900 and 1300 < bottom < 1400
+
+
+def test_find_paper_leaves_cropped_photos_and_tiny_specks_alone():
+    assert ocr.find_paper(_photo((0, 0, 1200, 1600))) is None
+    assert ocr.find_paper(_photo((500, 500, 560, 560))) is None
+    assert ocr.find_paper(Image.new("L", (1200, 1600), 240)) is None
+
+
+def test_paper_found_means_one_pass_on_the_crop(monkeypatch):
+    sizes = []
+    monkeypatch.setattr(ocr, "_image_to_data", lambda image, timeout=0: sizes.append(image.size) or _words(CENTERED, conf=50))
+    ocr.run_ocr(_photo((400, 300, 800, 1300)))
+    assert len(sizes) == 1 and sizes[0][0] < 1200 * 2
+
+
+def test_reading_too_slowly_says_so(monkeypatch):
+    def slow(*args, **kwargs):
+        raise RuntimeError("Tesseract process timeout")
+
+    monkeypatch.setattr(ocr.pytesseract, "image_to_data", slow)
+    with pytest.raises(ocr.OcrTooSlow):
+        ocr.run_ocr(_photo())
+
+
+def test_tall_narrow_receipts_are_not_blown_up():
+    assert max(ocr.preprocess(Image.new("L", (500, 2400), 255)).size) <= ocr.MAX_UPSCALED_SIDE

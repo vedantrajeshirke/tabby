@@ -78,6 +78,8 @@ class SafeBackend:
             return self.backend.extract(file_bytes, filename)
         except files.FileRejected as e:
             return unreadable(str(e))
+        except ocr.OcrTooSlow:
+            return unreadable(ocr.TOO_SLOW)
         except pytesseract.TesseractNotFoundError:
             return unreadable("Tesseract OCR isn't installed, so this file can't be read. Install it or enter the expense manually.")
         except Exception as e:

@@ -112,3 +112,13 @@ def test_real_ocr_on_scanned_pdf():
 def test_real_ocr_on_blank_image_is_unreadable():
     result = get_backend(CFG).extract(image_bytes(Image.new("RGB", (800, 800), "white")), "blank.png")
     assert result.document_type == "unreadable"
+
+
+def test_slow_read_becomes_a_clear_message(monkeypatch):
+    def too_slow(*args, **kwargs):
+        raise extraction.ocr.OcrTooSlow
+
+    monkeypatch.setattr(extraction.ocr, "run_ocr", too_slow)
+    result = get_backend(CFG).extract(image_bytes(Image.new("RGB", (10, 10))), "made-up.png")
+    assert result.document_type == "unreadable"
+    assert "Crop it closer" in result.field_reason["document_type"]

@@ -1,6 +1,8 @@
 FROM python:3.13-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr && rm -rf /var/lib/apt/lists/*
+# One thread: on a small shared CPU, Tesseract's extra threads only slow it down.
+ENV OMP_THREAD_LIMIT=1
 
 WORKDIR /app
 COPY requirements.txt .
