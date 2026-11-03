@@ -117,6 +117,7 @@ Charts are hand-built with SVG and HTML, because Plotly would add megabytes to t
 ## Known limitations
 
 - **OCR accuracy varies.** Borderline phone photos can read differently between Tesseract versions, and may fall back to manual entry. Line items are read but not shown yet.
+- **Discounts and fees aren't split out.** On an order with promo codes, savings or fees (bag fee, bottle deposit), the total is read correctly, but the subtotal is the receipt's pre-discount line. Subtotal + tax + tip then won't add up to the total, and the form flags it for you to check.
 - **USD only.** Every amount is treated as US dollars, including on receipts showing another currency symbol.
 - **Expenses only.** Refunds and credits aren't tracked.
 - **Upload limits are per server.** The rate limit is kept in memory, so it resets on restart.

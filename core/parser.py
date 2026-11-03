@@ -46,6 +46,9 @@ ISO_DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
 MONTH_FIRST_RE = re.compile(rf"\b{MONTH}\.?\s+(\d{{1,2}}),?\s+(\d{{4}})\b", re.I)
 DAY_FIRST_RE = re.compile(rf"\b(\d{{1,2}})\s+{MONTH}\.?,?\s+(\d{{4}})\b", re.I)
 
+DATE_LABEL_RE = re.compile(r"\b(ORDER(?:ED)?|DATE|PURCHASED?|TRANSACTION|PLACED|ISSUED)\b", re.I)
+# A browser's print header or footer: the moment the page was printed, not when the purchase happened.
+PRINTED_AT_RE = re.compile(r"\d{1,2}/\d{1,2}/\d{2,4},\s*\d{1,2}:\d{2}")
 PHONE_RE = re.compile(r"\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}")
 URL_RE = re.compile(r"https?:|www\.|\.(com|org|net)\b", re.I)
 STREET_RE = re.compile(
@@ -190,9 +193,24 @@ def find_dates(text: str) -> list[date]:
 
 
 def parse_date(text: str) -> tuple[str | None, str | None, str]:
-    dates = find_dates(text)
+    """A labelled date ("Order date", "Sep 4, 2026 order") wins; a page's print timestamp is a last resort."""
+    labelled, plain, printed = [], [], []
+    for line in split_lines(text):
+        dates = find_dates(line)
+        if PRINTED_AT_RE.search(line) or URL_RE.search(line):
+            printed += dates
+        elif DATE_LABEL_RE.search(line):
+            labelled += [(d, line) for d in dates]
+        else:
+            plain += dates
+    if labelled:
+        found, line = labelled[0]
+        return found.isoformat(), "high", f"date labelled on line '{line}'"
+    dates = plain or printed
     if not dates:
         return None, None, "no date found"
+    if not plain:
+        return dates[0].isoformat(), "low", "only found the date the page was printed"
     if len(set(dates)) == 1:
         return dates[0].isoformat(), "high", f"found one date: {dates[0].isoformat()}"
     return dates[0].isoformat(), "medium", f"found {len(set(dates))} different dates; used the first"

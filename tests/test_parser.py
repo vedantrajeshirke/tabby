@@ -267,3 +267,29 @@ def test_number_led_line_is_not_a_merchant():
 
 def test_ralphs_is_known_even_as_plural_keyword():
     assert parse("RALPHS rewards CUSTOMER\nWidget 5.00\nTOTAL 5.00", merchant_keywords=KEYWORDS).merchant == "Ralphs"
+
+
+PRINTED_ORDER = """1/20/2027, 09:15 Order details - madeupmart.com
+Made Up Mart
+Mar 03, 2026 order
+Order# 0000-1111
+Subtotal $20.00
+Taxes $1.50
+Total $21.50
+https://www.madeupmart.com/orders/0000 1/1"""
+
+
+def test_print_timestamp_loses_to_the_order_date():
+    assert parse(PRINTED_ORDER).date == "2026-03-03"
+    assert parse(PRINTED_ORDER).field_confidence["date"] == "high"
+
+
+def test_labelled_date_wins_over_an_earlier_unlabelled_one():
+    text = "MADE UP SHOP\n02/14/2026 RETURN BY\nPurchase date: 01/15/2026\nTOTAL 9.00"
+    assert parse(text).date == "2026-01-15"
+
+
+def test_print_timestamp_is_only_a_last_resort():
+    e = parse("1/20/2027, 09:15 Order details - madeupmart.com\nMADE UP SHOP\nTOTAL 9.00")
+    assert e.date == "2027-01-20"
+    assert e.field_confidence["date"] == "low"
