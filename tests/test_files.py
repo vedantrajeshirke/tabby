@@ -1,3 +1,5 @@
+import base64
+import io
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -43,6 +45,19 @@ def test_load_image_applies_exif_rotation():
 def test_load_heic():
     data = image_bytes(Image.new("RGB", (64, 64), "white"), "HEIF")
     assert files.load_image(data).size == (64, 64)
+
+
+def test_heic_gets_a_small_jpeg_preview():
+    data = image_bytes(Image.new("RGB", (3000, 2000), "white"), "HEIF")
+    preview = files.browser_preview(data, "receipt.HEIC")
+    assert preview.startswith("data:image/jpeg;base64,")
+    shown = Image.open(io.BytesIO(base64.b64decode(preview.split(",", 1)[1])))
+    assert max(shown.size) == files.PREVIEW_SIDE
+
+
+def test_preview_only_for_formats_browsers_cant_show():
+    assert files.browser_preview(image_bytes(Image.new("RGB", (64, 64)), "PNG"), "a.png") is None
+    assert files.browser_preview(b"not an image", "a.heic") is None
 
 
 def test_pdf_with_text_layer_returns_text():

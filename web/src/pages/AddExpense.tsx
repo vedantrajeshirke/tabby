@@ -98,7 +98,7 @@ export default function AddExpense({ localMode }: { localMode: boolean }) {
       <ConfirmForm
         upload={stage.upload}
         file={file}
-        previewUrl={previewUrl}
+        previewUrl={stage.upload?.preview ?? previewUrl}
         categories={categories}
         onDiscard={reset}
         onSaved={(expense) => {

@@ -1,4 +1,5 @@
 """Upload checks, hashing, image loading and PDF text/rendering. Uploads are read, never kept."""
+import base64
 import hashlib
 import io
 from dataclasses import dataclass, field
@@ -16,6 +17,7 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_PDF_PAGES = 3
 MIN_TEXT_LAYER_CHARS = 20
 PDF_RENDER_DPI = 300
+PREVIEW_SIDE = 1200
 
 
 class FileRejected(ValueError):
@@ -55,6 +57,20 @@ def load_image(file_bytes: bytes) -> Image.Image:
     image = Image.open(io.BytesIO(file_bytes))
     image.load()
     return ImageOps.exif_transpose(image)
+
+
+def browser_preview(file_bytes: bytes, filename: str) -> str | None:
+    """A small JPEG data URL for formats most browsers can't show (HEIC). Returned once, never stored."""
+    if extension(filename) != "heic":
+        return None
+    try:
+        image = load_image(file_bytes).convert("RGB")
+    except Exception:
+        return None
+    image.thumbnail((PREVIEW_SIDE, PREVIEW_SIDE))
+    out = io.BytesIO()
+    image.save(out, "JPEG", quality=75)
+    return "data:image/jpeg;base64," + base64.b64encode(out.getvalue()).decode()
 
 
 def alnum_count(text: str) -> int:

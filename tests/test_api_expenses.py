@@ -4,13 +4,14 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from api import deps, rate_limit
 from api.main import app
 from core import db
 from core import files
 from core.models import Extraction
-from tests.helpers import text_pdf
+from tests.helpers import image_bytes, text_pdf
 
 USER_A = "00000000-0000-0000-0000-00000000000a"
 USER_B = "00000000-0000-0000-0000-00000000000b"
@@ -65,6 +66,12 @@ def test_extract_reads_file_and_saves_nothing(api):
     assert body["extraction"]["total"] == 1.80
     assert (body["category"], body["category_source"], body["blocks_save"]) == ("Groceries", "rule", False)
     assert count(api) == 0
+    assert body["preview"] is None  # the browser can show a PDF itself
+
+
+def test_heic_upload_returns_a_jpeg_preview(api):
+    heic = image_bytes(Image.new("RGB", (200, 300), "white"), "HEIF")
+    assert extract(api, "made-up.heic", heic).json()["preview"].startswith("data:image/jpeg;base64,")
 
 
 @pytest.mark.parametrize(

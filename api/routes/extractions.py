@@ -32,17 +32,19 @@ async def create_extraction(
     user_id: str = Depends(current_user),
     conn=Depends(get_conn),
 ) -> dict:
-    """Read a file and report on it. The file is discarded; only its hash goes back to the browser."""
+    """Read a file and report on it. The file is discarded; only its hash (and a HEIC preview) go back to the browser."""
     if not rate_limit.allow_upload(user_id):
         raise HTTPException(status_code=429, detail="That's a lot of uploads at once. Wait a minute, then try again.")
     data, filename = await read_upload(file)
     async with reading:  # off the event loop, so the server keeps answering while it reads
         extraction = await run_in_threadpool(get_backend().extract, data, filename)
+        preview = await run_in_threadpool(files.browser_preview, data, filename)
     file_hash = files.file_hash(data)
     today = expenses.resolve_today(client_today)
     return {
         "extraction": extraction.to_dict(),
         "file_hash": file_hash,
+        "preview": preview,
         "suggested_date": extraction.date or today.isoformat(),
         **expenses.review_upload(conn, user_id, extraction, file_hash, today),
     }

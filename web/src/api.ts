@@ -35,7 +35,12 @@ export type Extraction = {
   raw_text: string;
 };
 
-export type Upload = Report & { extraction: Extraction; file_hash: string; suggested_date: string };
+export type Upload = Report & {
+  extraction: Extraction;
+  file_hash: string;
+  suggested_date: string;
+  preview?: string | null; // a JPEG copy for files the browser can't show, such as HEIC
+};
 
 export type ExpenseBody = {
   merchant: string;
