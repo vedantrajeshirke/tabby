@@ -14,7 +14,8 @@ SECRET_PATTERNS = {
     "JWT or Supabase key": r"eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}",
     "Supabase secret key": r"sb_secret_[A-Za-z0-9_-]{10,}",
     "API key": r"\bsk-[A-Za-z0-9_-]{20,}",
-    "database URL with a password": r"postgres(ql)?://[^\s:/]+:[^\s@/]+@",
+    # the local Docker default and the README's template are public placeholders
+    "database URL with a password": r"postgres(ql)?://(?!snapspend:snapspend@localhost|USER:PASSWORD@)[^\s:/]+:[^\s@/]+@",
     "private key": r"-----BEGIN [A-Z ]*PRIVATE KEY-----",
     "full card number": r"(?<![\d-])[3-6](?:[ -]?\d){14,15}(?![\d-])",  # card networks start with 3-6
 }
@@ -58,6 +59,19 @@ def test_no_secrets_in_tracked_files():
 )
 def test_card_pattern(text, found):
     assert bool(re.search(SECRET_PATTERNS["full card number"], text)) is found
+
+
+@pytest.mark.parametrize(
+    "text, found",
+    [
+        ("postgresql://postgres.abc:hunter2@aws-1.pooler.supabase.com:5432/postgres", True),
+        ("postgresql://snapspend:other@localhost:5433/snapspend", True),
+        ("postgresql://snapspend:snapspend@localhost:5433/snapspend", False),
+        ("postgresql://USER:PASSWORD@HOST:PORT/DATABASE", False),
+    ],
+)
+def test_database_url_pattern(text, found):
+    assert bool(re.search(SECRET_PATTERNS["database URL with a password"], text)) is found
 
 
 @pytest.mark.parametrize(
