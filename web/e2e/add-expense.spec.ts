@@ -32,7 +32,7 @@ test("a read receipt is prefilled, confirmed and saved", async ({ page }) => {
   await expect(page.getByText("$23.47")).toBeVisible();
 
   await page.getByRole("button", { name: "Add another" }).click();
-  await expect(page.getByText("Take a photo or choose a file")).toBeVisible();
+  await expect(page.getByText("Choose a photo or file")).toBeVisible();
 });
 
 test("the same file again gets a duplicate warning, and can still be saved", async ({ page }) => {
@@ -132,7 +132,7 @@ test("an unsupported file gets a clear message and the page keeps working", asyn
   await page.goto("/");
   await upload(page, "notes.txt");
   await expect(page.getByRole("alert")).toContainText("file type isn't supported");
-  await expect(page.getByText("Take a photo or choose a file")).toBeVisible();
+  await expect(page.getByText("Choose a photo or file")).toBeVisible();
 });
 
 test("an unsaved expense survives visiting another page", async ({ page }) => {

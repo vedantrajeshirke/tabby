@@ -37,7 +37,7 @@ If Tesseract is missing, the app says so and everything except reading photos an
 
 ### From a phone
 
-On the hosted app, sign in and tap **Take a photo or choose a file**. Your phone's normal file picker offers the camera. The layout is designed for phones first, with a bottom menu.
+On the hosted app, sign in and tap **Choose a photo or file**. On a phone, the picker also offers to take a photo. The layout is designed for phones first, with a bottom menu.
 
 ## How extraction works
 

@@ -169,7 +169,7 @@ export default function AddExpense({ localMode }: { localMode: boolean }) {
               <path d="M12 16V5M7.5 9.5 12 5l4.5 4.5M5 19h14" />
             </svg>
           </span>
-          <span className="mt-4 font-medium text-pine">Take a photo or choose a file</span>
+          <span className="mt-4 font-medium text-pine">Choose a photo or file</span>
           <span className="mt-1 text-sm text-muted">JPG, PNG, WEBP, HEIC or PDF, up to 10 MB</span>
           <input
             type="file"

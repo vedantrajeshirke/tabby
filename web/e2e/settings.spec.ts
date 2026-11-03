@@ -59,7 +59,7 @@ test("deleting needs the exact word, then removes everything", async ({ page, re
   await expect(remove).toBeDisabled();
   await page.getByLabel("Type DELETE to confirm").fill("DELETE");
   await remove.click();
-  await expect(page.getByText("Take a photo or choose a file")).toBeVisible();
+  await expect(page.getByText("Choose a photo or file")).toBeVisible();
 
   const left: unknown[] = await (await request.get("/api/expenses")).json();
   expect(left).toEqual([]);
