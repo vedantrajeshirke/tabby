@@ -278,7 +278,7 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
   const shownCategory = category ?? report?.category ?? existing?.category ?? "";
   const rawText = existing?.extraction?.raw_text ?? extraction?.raw_text;
   const heading = existing ? "Edit expense" : prefill ? "Check the details" : "Enter the details";
-  const intro = existing ? "Change anything that's wrong, then save." : prefill ? "Fix anything that looks wrong, then save." : "Add what you know. Only the total and date are needed.";
+  const intro = existing ? "Change anything that's wrong, then save." : prefill ? "Fix anything that looks wrong, then save." : "Add what you know. Total, merchant and date are required.";
   const hasPreview = Boolean(file && previewUrl);
 
   return (
@@ -309,15 +309,17 @@ export default function ConfirmForm({ upload = null, existing, file = null, prev
 
           {amountInput("total", "Total ($)", true)}
 
-          <Field label="Merchant" htmlFor="merchant" {...fieldState("merchant")} warning={merchantIssues.warning}>
+          <Field label="Merchant" htmlFor="merchant" required {...fieldState("merchant")} error={merchantIssues.error}>
             <input
               id="merchant"
               maxLength={200}
               autoComplete="off"
+              aria-required
+              aria-invalid={Boolean(merchantIssues.error)}
               value={values.merchant}
               onChange={(e) => set("merchant", e.target.value)}
               onBlur={() => leave("merchant")}
-              className={`${inputBase} ${merchantIssues.warning || fieldState("merchant").status === "check" ? "border-caution" : "border-line"}`}
+              className={`${inputBase} ${merchantIssues.error ? "border-expense" : fieldState("merchant").status === "check" ? "border-caution" : "border-line"}`}
             />
           </Field>
 

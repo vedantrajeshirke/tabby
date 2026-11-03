@@ -58,7 +58,7 @@ test("a failed read fills nothing and offers a clearer photo or manual entry", a
   await expect(page.getByLabel(/^Total/)).toHaveValue("");
   await expect(page.getByLabel("Merchant")).toHaveValue("");
   await expect(page.getByText("Total amount is required.")).toHaveCount(0);
-  await expect(page.getByText("Merchant not found")).toHaveCount(0);
+  await expect(page.getByText("Merchant is required.")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Save expense" }).click();
   await expect(page.getByText("Total amount is required.")).toBeVisible();
@@ -109,13 +109,13 @@ test("required fields are marked, and messages only appear once a field is left 
   await page.getByRole("button", { name: "Enter manually instead" }).click();
   await expect(page.getByText("Required", { exact: false }).first()).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await expect(page.getByRole("status").filter({ hasText: "Merchant not found" })).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Merchant is required." })).toHaveCount(0);
 
   await page.getByLabel("Merchant").focus();
   await page.getByLabel("Note").focus();
-  await expect(page.getByText("Merchant not found; please add one.")).toBeVisible();
+  await expect(page.getByText("Merchant is required.")).toBeVisible();
   await page.getByLabel("Merchant").fill("Made Up Cafe");
-  await expect(page.getByText("Merchant not found")).toHaveCount(0);
+  await expect(page.getByText("Merchant is required.")).toHaveCount(0);
 
   await page.getByLabel(/^Total/).focus();
   await page.getByLabel("Note").focus();
@@ -159,4 +159,15 @@ test("no horizontal scrolling on the confirm screen", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Check the details" })).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("an expense can't be saved without a merchant", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Enter manually instead" }).click();
+  await page.getByLabel(/^Total/).fill("9.50");
+  await expect(page.getByRole("button", { name: "Save expense" })).toBeEnabled();
+  await page.getByRole("button", { name: "Save expense" }).click();
+  await expect(page.getByText("Merchant is required.")).toBeVisible();
+  await expect(page.getByLabel("Merchant")).toBeFocused();
+  await expect(page.getByRole("heading", { name: "Enter the details" })).toBeVisible();
 });

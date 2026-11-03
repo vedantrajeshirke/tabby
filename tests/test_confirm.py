@@ -72,11 +72,10 @@ def test_build_expense_stores_edits_and_the_original_read():
     assert json.loads(expense.extraction_json)["total"] == 10.0
 
 
-def test_build_expense_without_merchant_or_extraction():
+def test_build_expense_without_extraction():
     original = confirm.start_manual()
-    values = form(merchant="", date=TODAY)
+    values = form(date=TODAY)
     expense = confirm.build_expense(original, confirm.apply_edits(original, values), values, "Other", "default")
-    assert expense.merchant == confirm.UNKNOWN_MERCHANT
     assert expense.document_type == "manual"
     assert expense.extraction_json is None
 

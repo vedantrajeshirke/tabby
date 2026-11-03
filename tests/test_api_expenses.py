@@ -206,8 +206,11 @@ def test_invalid_json_and_category_are_refused(api):
     assert post_expense(api, category="Not A Category").status_code == 422
 
 
-def test_blank_merchant_saves_with_placeholder(api):
-    assert post_expense(api, merchant="  ", category="Other").json()["expense"]["merchant"] == "Unknown merchant"
+def test_blank_merchant_is_refused(api):
+    response = post_expense(api, merchant="  ", category="Other")
+    assert response.status_code == 422
+    assert [i["code"] for i in response.json()["detail"]["issues"]] == ["V12"]
+    assert api.get("/api/expenses").json() == []
 
 
 def test_always_use_category_applies_next_time(api):

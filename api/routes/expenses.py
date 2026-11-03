@@ -100,7 +100,7 @@ def edit_expense(expense_id: int, body: ExpenseEdit, user_id: str = Depends(curr
     if checked.blocked:
         raise blocked_response(checked)
     db.update_expense(conn, user_id, expense_id, {
-        "merchant": checked.edited.merchant or confirm.UNKNOWN_MERCHANT,
+        "merchant": checked.edited.merchant,
         "date": checked.edited.date,
         "total": round(checked.edited.total, 2),
         "subtotal": checked.edited.subtotal,

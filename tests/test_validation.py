@@ -108,6 +108,7 @@ def test_v11_low_confidence_names_the_field():
 def test_v12_missing_merchant_warns():
     assert codes(good(merchant=None)) == ["V12"]
     assert codes(good(merchant="")) == ["V12"]
+    assert blocks_save(validate(good(merchant=None), TODAY))
 
 
 def test_payment_screenshot_is_validated_normally():

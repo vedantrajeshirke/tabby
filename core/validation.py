@@ -5,7 +5,7 @@ from core.models import Extraction, ValidationIssue
 
 AMOUNT_TOLERANCE = 0.05
 MAX_AGE_DAYS = 365
-BLOCKING_CODES = {"V03", "V04", "V06"}
+BLOCKING_CODES = {"V03", "V04", "V06", "V12"}
 DOCUMENT_ERRORS = {
     "not_an_expense": ("V01", "Couldn't find any amounts, so this may not be a receipt. Upload a clearer photo or enter it manually."),
     "unreadable": ("V02", "Couldn't read this clearly enough to fill it in. Upload a clearer photo or enter it manually."),
@@ -65,7 +65,7 @@ def _check_confidence(e: Extraction) -> list[ValidationIssue]:
 
 
 def _check_merchant(e: Extraction) -> list[ValidationIssue]:
-    return [] if e.merchant else [_warning("V12", "merchant", "Merchant not found; please add one.")]
+    return [] if e.merchant else [_error("V12", "merchant", "Merchant is required. Enter the shop or person you paid.")]
 
 
 def validate(e: Extraction, today: date | None = None) -> list[ValidationIssue]:

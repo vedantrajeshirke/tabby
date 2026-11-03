@@ -279,7 +279,7 @@ class ExtractionBackend(Protocol):
 | V07 | `date` > 365 days old | warning | "This expense is over a year old. Is the date right?" |
 | V08 | `subtotal + tax + tip` ≠ `total` (tolerance $0.05) when subtotal and total are present | warning | "Subtotal + tax + tip = $X but total is $Y. Please check the amounts." |
 | V11 | any `field_confidence` is `low` | warning | Highlight the field: "Please double-check the total." |
-| V12 | `merchant` missing | warning | "Merchant not found; please add one." |
+| V12 | `merchant` missing | error (blocks save) | "Merchant is required. Enter the shop or person you paid." |
 
 **Errors** marked "blocks save" stop saving until fixed: pressing Save shows what's wrong and moves to that field, and the server refuses them too. Each message appears next to its field, and V03 and V12 only appear once the field has been left empty or Save was pressed. Required fields are marked with `*`. V01/V02 show the manual entry option prominently. **Warnings** are shown in yellow but don't block saving.
 

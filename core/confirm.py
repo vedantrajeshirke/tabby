@@ -7,7 +7,7 @@ from core.models import Expense, Extraction, ValidationIssue
 from core.redact import redact_value
 from core.validation import validate
 
-UNKNOWN_MERCHANT = "Unknown merchant"
+UNKNOWN_MERCHANT = "Unknown merchant"  # on expenses saved before a merchant was required
 UNUSABLE_DOCUMENT_TYPES = {"unreadable", "not_an_expense"}
 
 
@@ -66,7 +66,7 @@ def build_expense(
     """`original` is stored as read, minus sensitive details, so the extraction stays traceable after edits."""
     has_extraction = original.document_type != "manual" or original.raw_text
     return Expense(
-        merchant=edited.merchant or UNKNOWN_MERCHANT,
+        merchant=edited.merchant,
         date=edited.date,
         total=round(edited.total, 2),
         subtotal=edited.subtotal,
