@@ -172,6 +172,7 @@ Charts are hand-built with SVG and HTML, because Plotly would add megabytes to t
 - **Discounts and fees aren't split out.** On an order with promo codes, savings or fees (bag fee, bottle deposit), the total is read correctly, but the subtotal is the receipt's pre-discount line. Subtotal + tax + tip then won't add up to the total, and the form flags it for you to check.
 - **USD only.** Every amount is treated as US dollars, including on receipts showing another currency symbol.
 - **Expenses only.** Refunds and credits aren't tracked.
+- **Account emails are limited on the hosted app.** Sign-up doesn't confirm email addresses, so you can start straight away. Password-reset emails can't be delivered yet, because the free email service only reaches the project's own team. A production version would add its own email service and turn confirmation back on.
 - **Upload limits are per server.** The rate limit is kept in memory, so it resets on restart.
 - **Free hosting sleeps.** Free Supabase projects pause after a week of inactivity, and free API hosts can take a while to wake.
 - **HEIC previews** only show in browsers that support them. The file is still read.
