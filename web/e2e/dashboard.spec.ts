@@ -95,12 +95,33 @@ test("a past period can be opened, even with one expense, without budget or insi
   await expect(page.getByRole("rowheader", { name: label })).toBeVisible();
 });
 
-test("fewer than three expenses shows a friendly message instead of empty charts", async ({ page }) => {
-  await page.route("**/api/dashboard**", (route) => route.fulfill({ json: { ...SAMPLE, expense_count: 2 } }));
+test("a few expenses are enough for the charts", async ({ page }) => {
+  await page.route("**/api/dashboard**", (route) => route.fulfill({ json: { ...SAMPLE, expense_count: 1 } }));
   await goToDashboard(page);
-  await expect(page.getByText("Add 1 more expense this period")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Where it went" })).toBeVisible();
+  await expect(page.getByText("No expenses yet this period")).toHaveCount(0);
+});
+
+test("a new period with no expenses still shows past spending", async ({ page }) => {
+  const empty = {
+    ...SAMPLE,
+    expense_count: 0,
+    spent: 0,
+    average_daily: 0,
+    insights: [],
+    insights_message: "Add a few more expenses to see insights.",
+    categories: { rows: [], includes_synthetic: false },
+    comparison: null,
+    top: { rows: [], includes_synthetic: false },
+  };
+  await page.route("**/api/dashboard**", (route) => route.fulfill({ json: empty }));
+  await goToDashboard(page);
+  await expect(page.getByText("No expenses yet this period")).toBeVisible();
   await expect(page.getByRole("link", { name: "Add expense" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Spending over time" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Where it went" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Top expenses" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Insights" })).toHaveCount(0);
 });
 
 test("over budget, insights, comparison and labels all show", async ({ page }) => {

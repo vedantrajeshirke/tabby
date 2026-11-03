@@ -359,7 +359,7 @@ Show a visible label **"Includes synthetic demo data"** on any chart whose data 
 
 **Past periods:** a period picker opens any earlier period with expenses, as a finished period. It shows the spent total, charts and top expenses, even for one expense, but no budget or insights: budgets aren't stored per period, and insights talk about the period under way. The trend chart stays at the last 6 periods, and its table lists every period with expenses, newest first.
 
-**Empty state:** if there are fewer than 3 expenses in the current period, show a friendly message and a button to add an expense instead of empty charts.
+**Empty state:** every period with at least one expense shows its charts. A current period with none still shows the budget pace and spending over time, with a note and a button to add an expense in place of the empty sections. Insights still need 5 expenses.
 
 ### 6.13 Insights (P0: five generators; P1: the rest)
 Each generator is a pure function that takes the expenses DataFrame and settings, and returns `Insight | None`:

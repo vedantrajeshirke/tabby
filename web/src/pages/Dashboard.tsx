@@ -5,8 +5,6 @@ import { CategorySplit, PeriodComparison, SpendingTrend } from "../components/ch
 import { formatDate, formatMoney, localToday } from "../format";
 import { CategoryTag, SyntheticTag } from "./Expenses";
 
-const MIN_EXPENSES = 3;
-
 function Card({ title, note, synthetic, children, className = "" }: {
   title: string;
   note?: string;
@@ -203,44 +201,48 @@ export default function Dashboard() {
     );
   }
 
-  if (data.period.is_current && data.expense_count < MIN_EXPENSES) {
-    const left = MIN_EXPENSES - data.expense_count;
-    return (
-      <section className="space-y-6">
-        {heading}
-        <div className="rounded-2xl border border-line p-10 text-center">
-          <p className="font-medium text-pine">Your dashboard is almost ready</p>
-          <p className="mt-1 text-sm text-muted">
-            Add {left} more {left === 1 ? "expense" : "expenses"} this period to see your charts and pace.
-          </p>
-          <Link to="/" className="mt-4 inline-block rounded-xl bg-forest px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-pine">
-            Add expense
-          </Link>
-        </div>
-      </section>
-    );
-  }
+  // Only the current period gets here empty. Its pace and past spending still say something.
+  const empty = data.expense_count === 0;
+  const hasHistory = data.trend.history.some((p) => p.total > 0);
 
   return (
     <section className="space-y-4">
       <div className="pb-2">{heading}</div>
       <BudgetPace data={data} />
-      {data.period.is_current && <Insights data={data} />}
-      <Card title="Where it went" synthetic={data.categories.includes_synthetic}>
-        <CategorySplit rows={data.categories.rows} />
-      </Card>
-      {data.comparison && (
-        <Card title="Compared with last period" note={data.comparison.label} synthetic={data.comparison.includes_synthetic}>
-          <PeriodComparison comparison={data.comparison} />
-        </Card>
+      {empty ? (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-mint p-5 text-pine">
+          <div>
+            <h2 className="font-semibold tracking-tight">No expenses yet this period</h2>
+            <p className="mt-0.5 text-sm">Add one to see where your money goes.</p>
+          </div>
+          <Link to="/" className="rounded-xl bg-forest px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-pine">
+            Add expense
+          </Link>
+        </section>
+      ) : (
+        <>
+          {data.period.is_current && <Insights data={data} />}
+          <Card title="Where it went" synthetic={data.categories.includes_synthetic}>
+            <CategorySplit rows={data.categories.rows} />
+          </Card>
+          {data.comparison && (
+            <Card title="Compared with last period" note={data.comparison.label} synthetic={data.comparison.includes_synthetic}>
+              <PeriodComparison comparison={data.comparison} />
+            </Card>
+          )}
+        </>
       )}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card title="Spending over time" note="Last 6 periods" synthetic={data.trend.includes_synthetic}>
-          <SpendingTrend points={data.trend.points} history={data.trend.history} />
-        </Card>
-        <Card title="Top expenses" synthetic={data.top.includes_synthetic}>
-          <TopExpenses rows={data.top.rows} />
-        </Card>
+      <div className={`grid gap-4 ${empty ? "" : "md:grid-cols-2"}`}>
+        {(!empty || hasHistory) && (
+          <Card title="Spending over time" note="Last 6 periods" synthetic={data.trend.includes_synthetic}>
+            <SpendingTrend points={data.trend.points} history={data.trend.history} />
+          </Card>
+        )}
+        {!empty && (
+          <Card title="Top expenses" synthetic={data.top.includes_synthetic}>
+            <TopExpenses rows={data.top.rows} />
+          </Card>
+        )}
       </div>
     </section>
   );

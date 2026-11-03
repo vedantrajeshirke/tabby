@@ -168,3 +168,12 @@ def test_hidden_synthetic_rows_leave_history_too():
     rows = [row("2025-03-10", 10, synthetic=True)]
     assert len(build(rows)["trend"]["history"]) == 2
     assert len(build(rows, hide_synthetic=True)["trend"]["history"]) == 1
+
+
+def test_a_new_period_with_no_expenses_still_has_past_spending():
+    rows = [row("2026-10-05", 30.0), row("2026-09-12", 20.0)]
+    data = build(rows, Settings(monthly_budget=500), date(2026, 11, 3))
+    assert data["expense_count"] == 0 and data["spent"] == 0
+    assert data["budget"]["remaining"] == 500
+    assert [p["total"] for p in data["trend"]["points"]] == [20.0, 30.0, 0]
+    assert data["comparison"] is None or all(r["current"] == 0 for r in data["comparison"]["rows"])
