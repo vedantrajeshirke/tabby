@@ -128,8 +128,11 @@ Charts are hand-built with SVG and HTML, because Plotly would add megabytes to t
 
 An AI vision backend for hard photos, bank CSV import, viewing and searching the items on a bill, refunds, line-item insights, other currencies, and roommate splits.
 
+What I would investigate next: how often each field gets corrected after it is read, which decides whether an AI backend is needed; whether people keep logging after the first few weeks; and splitting discounts and fees out of the subtotal on online orders.
+
 ## Time, AI use and prior work
 
-- **Time spent:** _to be filled in by the author_
-- **How AI was used:** _to be confirmed by the author._ Built with Claude Code, working milestone by milestone from `SPEC.md`. Its output was checked with the automated tests, by running the app, and by the author testing it with real receipts on their own computer.
+- **Time spent:** 4 hours.
+- **How AI was used:** I used Claude Code to write the code, working milestone by milestone from `SPEC.md`. I explained my idea, approach, design and features, how the app should look, and the test cases it needed to cover. I also used AI for help and information on hosting.
+- **How its output was checked:** with the automated tests above, by running the app after each change, and by testing it manually with my own test cases and real receipts on the live site.
 - **Prior work reused:** none outside the open-source dependencies listed above.
