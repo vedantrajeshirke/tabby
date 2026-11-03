@@ -2,7 +2,7 @@
 
 Tabby is a personal expense tracker for students. Upload a receipt, PDF or payment screenshot, check the details it read, and save it. The dashboard then shows your budget pace, where the money went, and plain-language insights. Nothing is saved until you confirm it, and the file itself is never stored.
 
-**Hosted app:** _link added after deployment_
+**Hosted app:** https://tabby-ebon.vercel.app (the first visit after it has been idle can take about a minute to wake up)
 
 ## Run it locally
 
